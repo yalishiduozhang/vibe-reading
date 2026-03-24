@@ -733,6 +733,23 @@
   padding: 14px;
 }
 
+.idea-card-actions,
+.idea-composer-shell,
+.composer-card {
+  display: grid;
+  gap: 12px;
+}
+
+.composer-markdown-preview {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', 'Cascadia Code', monospace;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  color: rgba(243, 239, 230, 0.82);
+}
+
 @media (max-width: 1320px) {
   .workspace-topbar {
     grid-template-columns: 1fr;

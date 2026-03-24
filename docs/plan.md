@@ -1,8 +1,8 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-24 22:23 (Asia/Shanghai)  
-当前阶段：Phase 3 prep + Phase 4 groundwork in progress  
+最后更新：2026-03-24 22:33 (Asia/Shanghai)  
+当前阶段：Phase 4 in progress + Phase 5 groundwork started  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
 ## 1. 文档目的
@@ -871,6 +871,31 @@ AI 任务拆分为：
 - 深化远程索引质量：更好的 artifact 排序、更多文件跳转信息与缓存策略
 - 评估是否引入第二组备选样本做回归验证
 
+
+### 2026-03-24 22:33 / Phase 5 groundwork milestone #1
+
+#### 已完成
+
+- 新增 `src/features/idea-workspace/composer.ts`，建立最小的 idea -> draft 规则生成模块
+- 在 Idea 面板中加入多条 idea 选择能力，不再只支持“保存后结束”
+- 在 Workspace 中加入 `Composer Preview`，支持 `Project proposal`、`Experiment plan`、`Reading memo` 三种草稿模式
+- 草稿预览已能把选中的 idea、原文锚点和下一步建议组织成 Markdown 结构
+- 为 Composer 预览补齐基础样式
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- WP-G 已启动，而且最小闭环已经成立：idea 工作台开始从“记录容器”转向“产出起点”
+- Phase 5 仍未完成，因为编辑、导出和 AI 扩展还未接入
+- 当前系统已经具备一条更完整的演示路径：读段落 -> 记 idea -> 选 idea -> 生成草稿
+
+#### 下一步
+
+- 继续补强 Composer：编辑、导出、结构优化
+- 继续深化 GitHub 远程索引与真实候选质量
+- 评估是否用第二组样本做回归验证
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1004,6 +1029,16 @@ AI 任务拆分为：
 - 这样更适合当前 Web-first 原型，能先验证公开仓库索引和候选生成链路是否成立。
 - 在没有后端桥接的前提下，这是一条更稳、更快、更利于课堂展示的实现路径。
 
+
+### D-015（2026-03-24）
+
+决定：Idea Composer 第一轮先放在现有 Workspace 的 Idea 面板内，以规则草稿预览验证闭环，而不是立即拆出独立页面或直接接入模型。
+
+原因：
+
+- 这样可以先验证“选择 idea -> 形成结构化草稿”这条链路是否成立。
+- 在没有模型配置和导出层之前，内联式 Composer 更适合快速验证交互价值。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
@@ -1028,9 +1063,9 @@ AI 任务拆分为：
 
 接下来应按以下顺序继续：
 
-1. 开始 WP-G：为 Idea 工作台建立最小 Composer 骨架，并明确 idea 选集到文档草稿的数据结构。
+1. 深化 Composer：补上草稿编辑、模式切换后的 section 结构优化，以及后续 Markdown 导出接口。
 2. 继续深化 GitHub 远程索引：补强 artifact 排序、文件跳转与缓存策略。
-3. 评估是否把 repo index / confirmation memory 抽成独立 store，继续推进 WP-H。
+3. 评估是否把 repo index / confirmation memory / composer selection 抽成独立 store，继续推进 WP-H。
 4. 评估是否需要把主样本之外的 LoRA / CLIP 作为回归样本加入验证。
 5. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
 

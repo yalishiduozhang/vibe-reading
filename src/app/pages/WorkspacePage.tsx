@@ -22,6 +22,7 @@ import {
   type CodeLinkDecisionKind,
   type StoredCodeLinkDecision,
 } from '../../features/code-link/mappings'
+import { buildIdeaDocumentDraft, draftModes, type DraftMode } from '../../features/idea-workspace/composer'
 import { analyzeRepoSource } from '../../features/code-link/source'
 import { buildContextCard, formatEvidenceRef } from '../../features/reader/context'
 import { loadPdfDocument, renderPdfPage } from '../../features/reader/pdf'
@@ -72,6 +73,8 @@ export default function WorkspacePage() {
   const [cachedPageCount, setCachedPageCount] = useState(0)
   const [draftIdea, setDraftIdea] = useState('')
   const [draftTag, setDraftTag] = useState<IdeaTag>('Improvement')
+  const [draftMode, setDraftMode] = useState<DraftMode>('Project proposal')
+  const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>([])
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -200,6 +203,11 @@ export default function WorkspacePage() {
     saveStoredCodeLinkDecisions(codeLinkDecisions)
   }, [codeLinkDecisions])
 
+  useEffect(() => {
+    const validIds = new Set(ideas.map((idea) => idea.id))
+    setSelectedIdeaIds((currentIds) => currentIds.filter((ideaId) => validIds.has(ideaId)))
+  }, [ideas])
+
   const selectedParagraph =
     pageSnapshot?.paragraphs.find((paragraph) => paragraph.id === selectedParagraphId) ??
     pageSnapshot?.paragraphs[0] ??
@@ -242,6 +250,8 @@ export default function WorkspacePage() {
           decision.decision === 'rejected',
       ).length
     : 0
+  const selectedIdeas = ideas.filter((idea) => selectedIdeaIds.includes(idea.id))
+  const ideaDraft = buildIdeaDocumentDraft(selectedIdeas, draftMode)
   const pageStatus = documentProxy ? `Page ${currentPage} / ${documentProxy.numPages}` : 'No PDF loaded'
   const isRenderingPage =
     Boolean(documentProxy) &&
@@ -457,6 +467,18 @@ export default function WorkspacePage() {
 
     setIdeas((currentIdeas) => [nextIdea, ...currentIdeas])
     setDraftIdea('')
+  }
+
+  function handleToggleIdeaSelection(ideaId: string) {
+    setSelectedIdeaIds((currentIds) =>
+      currentIds.includes(ideaId)
+        ? currentIds.filter((currentId) => currentId !== ideaId)
+        : [ideaId, ...currentIds],
+    )
+  }
+
+  function handleClearIdeaSelection() {
+    setSelectedIdeaIds([])
   }
 
   function hydrateCachedSnapshot(
@@ -1019,31 +1041,84 @@ export default function WorkspacePage() {
 
           <div className="panel-subhead">
             <h3>Recent ideas</h3>
-            <span>Ideas can now jump back to their bound paragraph anchor.</span>
+            <span>{selectedIdeas.length} selected for composer</span>
           </div>
           <div className="idea-list">
             {ideas.length ? (
-              ideas.map((idea) => (
-                <article key={idea.id} className="idea-card">
-                  <div className="idea-card-head">
-                    <span className="term-chip">{idea.tag}</span>
-                    <small>{formatIdeaTime(idea.createdAt)}</small>
-                  </div>
-                  <p>{idea.text}</p>
-                  <small>{`From p.${idea.pageNumber} / ${idea.paragraphId}`}</small>
-                  <button
-                    className="ghost-button ghost-button-small"
-                    onClick={() => handleJumpToIdea(idea)}
-                    type="button"
-                  >
-                    Jump to Source
-                  </button>
-                </article>
-              ))
+              ideas.map((idea) => {
+                const isSelected = selectedIdeaIds.includes(idea.id)
+                return (
+                  <article key={idea.id} className="idea-card">
+                    <div className="idea-card-head">
+                      <span className="term-chip">{idea.tag}</span>
+                      <small>{formatIdeaTime(idea.createdAt)}</small>
+                    </div>
+                    <p>{idea.text}</p>
+                    <small>{`From p.${idea.pageNumber} / ${idea.paragraphId}`}</small>
+                    <div className="candidate-actions idea-card-actions">
+                      <button
+                        className="ghost-button ghost-button-small"
+                        onClick={() => handleJumpToIdea(idea)}
+                        type="button"
+                      >
+                        Jump to Source
+                      </button>
+                      <button
+                        className="ghost-button ghost-button-small"
+                        onClick={() => handleToggleIdeaSelection(idea.id)}
+                        type="button"
+                      >
+                        {isSelected ? 'Remove from Draft' : 'Add to Draft'}
+                      </button>
+                    </div>
+                  </article>
+                )
+              })
             ) : (
               <div className="empty-inline-state">
                 No ideas yet. Save one from a paragraph and it will stay in local
                 storage for the next document-composer milestone.
+              </div>
+            )}
+          </div>
+
+          <div className="panel-subhead panel-subhead-column">
+            <h3>Composer Preview</h3>
+            <span>{selectedIdeas.length ? `${selectedIdeas.length} ideas selected` : 'Select ideas to assemble a draft'}</span>
+          </div>
+          <div className="idea-composer-shell">
+            <div className="idea-form-row">
+              <label className="control-group">
+                <span>Draft Mode</span>
+                <select value={draftMode} onChange={(event) => setDraftMode(event.target.value as DraftMode)}>
+                  {draftModes.map((mode) => (
+                    <option key={mode} value={mode}>
+                      {mode}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                className="ghost-button ghost-button-small"
+                disabled={!selectedIdeas.length}
+                onClick={handleClearIdeaSelection}
+                type="button"
+              >
+                Clear Selection
+              </button>
+            </div>
+            {selectedIdeas.length ? (
+              <article className="context-card-block composer-card">
+                <div className="context-block-head">
+                  <h3>{ideaDraft.title}</h3>
+                  <span>{draftMode}</span>
+                </div>
+                <pre className="composer-markdown-preview">{ideaDraft.markdown}</pre>
+              </article>
+            ) : (
+              <div className="empty-inline-state">
+                Select one or more ideas and the composer will assemble a
+                structured draft preview here.
               </div>
             )}
           </div>
