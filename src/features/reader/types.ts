@@ -13,6 +13,7 @@ export type ReaderParagraph = {
   text: string
   preview: string
   lineCount: number
+  sentenceCount: number
   anchorTop: number
   importance: number
   rationale: string
@@ -24,6 +25,30 @@ export type ReaderPageSnapshot = {
   width: number
   height: number
   paragraphs: ReaderParagraph[]
+}
+
+export type EvidenceAttribution = 'quoted' | 'summary' | 'inference'
+
+export type EvidenceRef = {
+  pageNumber: number
+  paragraphId: string
+  sentenceStart: number
+  sentenceEnd: number
+  excerpt: string
+  label: string
+}
+
+export type ContextCardField = {
+  text: string
+  attribution: EvidenceAttribution
+}
+
+export type ContextCardData = {
+  summary: ContextCardField
+  focusNote: ContextCardField
+  whyItMatters: ContextCardField
+  evidenceRefs: EvidenceRef[]
+  terms: string[]
 }
 
 export type IdeaTag = 'Improvement' | 'Question' | 'Experiment' | 'Project'
@@ -51,12 +76,4 @@ export type CodeCandidate = {
   path: string
   reason: string
   confidence: 'High' | 'Medium' | 'Low'
-}
-
-export type ContextCardData = {
-  summary: string
-  focusNote: string
-  whyItMatters: string
-  evidence: string
-  terms: string[]
 }

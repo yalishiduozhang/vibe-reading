@@ -1,11 +1,7 @@
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-import type {
-  ReaderPageSnapshot,
-  ReaderParagraph,
-  ReadingIntent,
-} from './types'
+import type { ReaderPageSnapshot, ReaderParagraph, ReadingIntent } from './types'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -31,7 +27,6 @@ type PdfPageLike = {
 type RawTextItem = {
   str: string
   transform: number[]
-  width?: number
   height?: number
 }
 
@@ -128,7 +123,6 @@ function extractParagraphs(
     }
 
     const previousLine = current.lines.at(-1)
-
     if (!previousLine) {
       current.lines.push(line)
       continue
@@ -144,7 +138,7 @@ function extractParagraphs(
   }
 
   return buckets
-    .map((bucket, index) => finalizeParagraph(bucket, index, pageNumber, pageHeight, intent))
+    .map((bucket) => finalizeParagraph(bucket, pageNumber, pageHeight, intent))
     .filter((paragraph): paragraph is ReaderParagraph => paragraph !== null)
 }
 
@@ -204,7 +198,6 @@ function calculateGapThreshold(lines: LineRecord[]): number {
 
 function finalizeParagraph(
   bucket: ParagraphAccumulator,
-  index: number,
   pageNumber: number,
   pageHeight: number,
   intent: ReadingIntent,
@@ -216,21 +209,47 @@ function finalizeParagraph(
   }
 
   const topLine = bucket.lines[0]
+  const anchorTop = clamp(((pageHeight - topLine.y) / pageHeight) * 100, 6, 92)
+  const sentenceCount = splitSentences(text).length
   const importance = scoreParagraph(text, intent)
   const matchedTerms = collectKeyTerms(text)
   const preview = text.length > 180 ? `${text.slice(0, 177)}...` : text
+  const id = buildParagraphId(pageNumber, text, anchorTop, bucket.lines.length)
 
   return {
-    id: `p${pageNumber}-para-${index + 1}`,
+    id,
     pageNumber,
     text,
     preview,
     lineCount: bucket.lines.length,
-    anchorTop: clamp(((pageHeight - topLine.y) / pageHeight) * 100, 6, 92),
+    sentenceCount,
+    anchorTop,
     importance,
     rationale: buildRationale(text, matchedTerms, intent),
-    evidenceLabel: `p.${pageNumber} / para ${index + 1}`,
+    evidenceLabel: `p.${pageNumber} / ${id}`,
   }
+}
+
+function buildParagraphId(
+  pageNumber: number,
+  text: string,
+  anchorTop: number,
+  lineCount: number,
+): string {
+  const normalized = text.toLowerCase().replace(/\s+/g, ' ').trim()
+  const seed = `${pageNumber}|${normalized.slice(0, 220)}|${normalized.length}|${Math.round(anchorTop * 10)}|${lineCount}`
+  return `p${pageNumber}-${hashSeed(seed)}`
+}
+
+function hashSeed(seed: string): string {
+  let hash = 2166136261
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index)
+    hash = Math.imul(hash, 16777619)
+  }
+
+  return Math.abs(hash).toString(36).slice(0, 8)
 }
 
 function scoreParagraph(text: string, intent: ReadingIntent): number {
@@ -258,6 +277,10 @@ function collectKeyTerms(text: string): string[] {
   const matches = text.match(/\b[A-Z][A-Za-z0-9-]{2,}\b/g) ?? []
   const unique = new Set(matches)
   return Array.from(unique).slice(0, 4)
+}
+
+function splitSentences(text: string): string[] {
+  return text.split(/(?<=[.!?])\s+/).filter(Boolean)
 }
 
 function stitchFragments(fragments: string[]): string {

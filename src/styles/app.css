@@ -606,6 +606,75 @@
   margin: 0;
 }
 
+
+.reader-meta,
+.paragraph-card-meta,
+.evidence-label {
+  margin: 0;
+  font-size: 0.82rem;
+  color: rgba(243, 239, 230, 0.64);
+}
+
+.paragraph-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.context-block-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.attribution-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.attribution-chip-quoted {
+  background: rgba(86, 153, 104, 0.16);
+  border-color: rgba(86, 153, 104, 0.3);
+}
+
+.attribution-chip-summary {
+  background: rgba(217, 181, 109, 0.14);
+  border-color: rgba(217, 181, 109, 0.28);
+}
+
+.attribution-chip-inference {
+  background: rgba(110, 153, 183, 0.14);
+  border-color: rgba(110, 153, 183, 0.28);
+}
+
+.evidence-list {
+  display: grid;
+  gap: 12px;
+}
+
+.evidence-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ghost-button-small {
+  min-height: 34px;
+  padding-inline: 14px;
+  font-size: 0.84rem;
+}
+
 @media (max-width: 1320px) {
   .workspace-topbar {
     grid-template-columns: 1fr;
