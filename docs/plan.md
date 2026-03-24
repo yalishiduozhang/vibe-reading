@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-24 22:03 (Asia/Shanghai)  
+最后更新：2026-03-24 22:23 (Asia/Shanghai)  
 当前阶段：Phase 3 prep + Phase 4 groundwork in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -844,6 +844,33 @@ AI 任务拆分为：
 - 用真实 repo artifact 替换当前 sample-aware 启发式候选
 - 为 Idea 工作台准备最小 Composer 骨架，避免后续文档生成链路堵塞
 
+
+### 2026-03-24 22:23 / Phase 4 groundwork milestone #1
+
+#### 已完成
+
+- 新增 `src/features/code-link/github.ts`，为公开 GitHub 仓库建立首轮远程索引链路
+- 首轮远程索引覆盖：repo root contents、README、优先目录扫描、少量关键源码文件抓取
+- 新增 `src/features/code-link/candidates.ts`，把代码候选生成从 `WorkspacePage` 下沉到 feature 模块
+- Code 面板现在可以手动触发 `Index Repo`，并展示远程索引到的目录与关键文件预览
+- 代码候选会优先消费真实 repo artifact，再回退到 sample-aware 启发式候选
+- 在 `WorkspacePage` 中引入最小的 repo index cache，避免同一 repo 反复拉取
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- WP-E 已有首个可工作的公开 GitHub 远程索引版本
+- WP-F 已启动，候选生成逻辑不再完全依赖样本常量
+- WP-H 也已启动，代码联动相关逻辑开始从页面层下沉为独立模块
+- 下一阶段的主阻塞已逐步从“能否索引 repo”转向“如何把 idea 组织成文档草稿”
+
+#### 下一步
+
+- 开始 WP-G：建立最小 Composer 骨架
+- 深化远程索引质量：更好的 artifact 排序、更多文件跳转信息与缓存策略
+- 评估是否引入第二组备选样本做回归验证
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -967,6 +994,16 @@ AI 任务拆分为：
 - 论文-代码联动第一版的核心不是“自动猜得多准”，而是“人工修正后能留下来并复用”。
 - 这样后续把启发式候选替换成真实索引候选时，不需要推翻用户已经确认的结果。
 
+
+### D-014（2026-03-24）
+
+决定：真实 GitHub repo 索引第一轮采用 `contents + README + 优先目录扫描 + 少量关键文件` 的轻量链路，而不是一开始就上更重的后端解析。
+
+原因：
+
+- 这样更适合当前 Web-first 原型，能先验证公开仓库索引和候选生成链路是否成立。
+- 在没有后端桥接的前提下，这是一条更稳、更快、更利于课堂展示的实现路径。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
@@ -991,10 +1028,10 @@ AI 任务拆分为：
 
 接下来应按以下顺序继续：
 
-1. 基于主样本开始真实 GitHub repo 索引：先做 repo tree、README 与关键源码文件的远程抓取策略。
-2. 将当前 sample-aware 候选映射逐步替换为真实 repo artifact 驱动的候选生成。
-3. 为 Idea 工作台提前设计最小 Composer 骨架，避免后续 idea -> 文档链路堵塞。
-4. 评估是否需要把代码联动结果抽成独立 store，避免后续扩展时页面状态过重。
+1. 开始 WP-G：为 Idea 工作台建立最小 Composer 骨架，并明确 idea 选集到文档草稿的数据结构。
+2. 继续深化 GitHub 远程索引：补强 artifact 排序、文件跳转与缓存策略。
+3. 评估是否把 repo index / confirmation memory 抽成独立 store，继续推进 WP-H。
+4. 评估是否需要把主样本之外的 LoRA / CLIP 作为回归样本加入验证。
 5. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
 
 ## 19. 当前迭代执行拆解（Iteration B）

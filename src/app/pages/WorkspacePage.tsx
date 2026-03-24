@@ -2,14 +2,18 @@ import { startTransition, useEffect, useId, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
 
+import { buildCodeCandidates } from '../../features/code-link/candidates'
 import {
   demoSamples,
   getDemoSampleById,
   matchDemoSampleBySource,
   primaryDemoSampleId,
-  type DemoSample,
   type DemoSampleId,
 } from '../../features/code-link/demoSamples'
+import {
+  fetchGitHubRepoIndex,
+  type GitHubRepoIndex,
+} from '../../features/code-link/github'
 import {
   buildCodeLinkDecision,
   getCandidateDecisionKey,
@@ -46,6 +50,7 @@ export default function WorkspacePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const readerShellRef = useRef<HTMLDivElement | null>(null)
   const snapshotCacheRef = useRef<Record<string, ReaderPageSnapshot>>({})
+  const repoIndexCacheRef = useRef<Record<string, GitHubRepoIndex>>({})
   const selectedByPageRef = useRef<Record<number, string>>({})
   const pendingJumpRef = useRef<PendingJump>(null)
   const fileInputId = useId()
@@ -67,8 +72,11 @@ export default function WorkspacePage() {
   const [cachedPageCount, setCachedPageCount] = useState(0)
   const [draftIdea, setDraftIdea] = useState('')
   const [draftTag, setDraftTag] = useState<IdeaTag>('Improvement')
+  const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
+  const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
+  const [isIndexingRepo, setIsIndexingRepo] = useState(false)
 
   useEffect(() => {
     let isActive = true
@@ -202,7 +210,12 @@ export default function WorkspacePage() {
   const matchedDemoSample =
     matchDemoSampleBySource(repoAnalysis.normalizedSource || repoSource) ?? selectedDemoSample
   const effectiveRepoSource = repoAnalysis.normalizedSource || repoSource.trim() || matchedDemoSample.repoUrl
-  const codeCandidates = buildCodeCandidates(selectedParagraph, effectiveRepoSource, matchedDemoSample)
+  const codeCandidates = buildCodeCandidates(
+    selectedParagraph,
+    effectiveRepoSource,
+    matchedDemoSample,
+    repoIndex,
+  )
   const paragraphDecisionKeys = new Set(
     selectedParagraph
       ? codeLinkDecisions
@@ -233,6 +246,17 @@ export default function WorkspacePage() {
   const isRenderingPage =
     Boolean(documentProxy) &&
     (pageSnapshot?.pageNumber !== currentPage || renderedIntent !== intent)
+
+  useEffect(() => {
+    if (repoAnalysis.kind !== 'github') {
+      setRepoIndex(null)
+      setRepoIndexError(null)
+      return
+    }
+
+    setRepoIndex(repoIndexCacheRef.current[effectiveRepoSource] ?? null)
+    setRepoIndexError(null)
+  }, [effectiveRepoSource, repoAnalysis.kind])
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const nextFile = event.target.files?.[0] ?? null
@@ -281,6 +305,34 @@ export default function WorkspacePage() {
     setSelectedDemoSampleId(nextSampleId)
     setAssistTab('code')
     setRepoSource(nextSample.repoUrl)
+  }
+
+  async function handleIndexRepo(forceRefresh = false) {
+    if (repoAnalysis.kind !== 'github') {
+      return
+    }
+
+    if (!forceRefresh) {
+      const cachedIndex = repoIndexCacheRef.current[effectiveRepoSource]
+      if (cachedIndex) {
+        setRepoIndex(cachedIndex)
+        setRepoIndexError(null)
+        return
+      }
+    }
+
+    setIsIndexingRepo(true)
+    setRepoIndexError(null)
+
+    try {
+      const nextIndex = await fetchGitHubRepoIndex(effectiveRepoSource)
+      repoIndexCacheRef.current[effectiveRepoSource] = nextIndex
+      setRepoIndex(nextIndex)
+    } catch (indexError: unknown) {
+      setRepoIndexError(getErrorMessage(indexError, 'Failed to index this GitHub repository.'))
+    } finally {
+      setIsIndexingRepo(false)
+    }
   }
 
   function handlePreviousPage() {
@@ -773,6 +825,66 @@ export default function WorkspacePage() {
               </section>
               <section className="context-card-block repo-analysis-block">
                 <div className="context-block-head">
+                  <h3>Remote Repo Index</h3>
+                  <span>{repoIndex ? `${repoIndex.keyFiles.length} files` : 'idle'}</span>
+                </div>
+                {repoAnalysis.kind === 'github' ? (
+                  <>
+                    <div className="candidate-actions">
+                      <button
+                        className="ghost-button ghost-button-small"
+                        disabled={isIndexingRepo}
+                        onClick={() => void handleIndexRepo(Boolean(repoIndex))}
+                        type="button"
+                      >
+                        {isIndexingRepo ? 'Indexing...' : repoIndex ? 'Refresh Index' : 'Index Repo'}
+                      </button>
+                    </div>
+                    {repoIndexError ? <p className="repo-analysis-note">{repoIndexError}</p> : null}
+                    {repoIndex ? (
+                      <>
+                        <p className="repo-analysis-note">
+                          {`Indexed ${repoIndex.scannedDirectories.length} directories and ${repoIndex.keyFiles.length} key files at ${formatIdeaTime(repoIndex.generatedAt)}.`}
+                        </p>
+                        <div className="repo-signal-list">
+                          {repoIndex.rootEntries
+                            .filter((entry) => entry.type === 'dir')
+                            .slice(0, 6)
+                            .map((entry) => (
+                              <span key={entry.path} className="repo-signal-item">
+                                {entry.path}
+                              </span>
+                            ))}
+                        </div>
+                        <div className="saved-mapping-list">
+                          {repoIndex.keyFiles.slice(0, 4).map((file) => (
+                            <article key={file.path} className="candidate-card candidate-card-compact">
+                              <div className="candidate-head">
+                                <strong>{file.name}</strong>
+                                <span>{file.size} B</span>
+                              </div>
+                              <p className="candidate-path">{file.path}</p>
+                              <p>{summarizeRepoSnippet(file.text)}</p>
+                            </article>
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="empty-inline-state">
+                        Run indexing to pull README, root contents, and a small
+                        set of key files from the public GitHub repo.
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="empty-inline-state">
+                    Remote indexing is only available for GitHub repo sources in
+                    the web-first prototype.
+                  </div>
+                )}
+              </section>
+              <section className="context-card-block repo-analysis-block">
+                <div className="context-block-head">
                   <h3>Confirmation Memory</h3>
                   <span>{repoConfirmedDecisions.length} confirmed</span>
                 </div>
@@ -959,137 +1071,6 @@ function ContextFieldBlock({ attribution, body, title }: ContextFieldBlockProps)
   )
 }
 
-function buildCodeCandidates(
-  paragraph: ReaderParagraph | null,
-  repoSource: string,
-  sample: DemoSample | null,
-): CodeCandidate[] {
-  if (!paragraph) {
-    return []
-  }
-
-  const sampleCandidates = sample ? buildSampleCodeCandidates(sample, paragraph, repoSource) : []
-  if (sampleCandidates.length) {
-    return sampleCandidates
-  }
-
-  const scope = extractTerms(paragraph.text)
-  const primaryTerm = scope[0] ?? 'ReaderModule'
-  const secondaryTerm = scope[1] ?? 'Config'
-
-  return [
-    {
-      id: `${paragraph.id}-candidate-1`,
-      symbol: `${primaryTerm}Block`,
-      path: buildRepoPath(repoSource, `src/${slugify(primaryTerm)}/core.py`),
-      reason: `Name overlap between the paragraph focus and ${primaryTerm}. The paragraph carries the highest current-page priority score.`,
-      confidence: 'High',
-    },
-    {
-      id: `${paragraph.id}-candidate-2`,
-      symbol: `${secondaryTerm.toLowerCase()}.yaml`,
-      path: buildRepoPath(repoSource, 'configs/train.yaml'),
-      reason: `Useful when the paragraph mixes implementation details and experiment setup language.`,
-      confidence: 'Medium',
-    },
-    {
-      id: `${paragraph.id}-candidate-3`,
-      symbol: `${primaryTerm}Runner`,
-      path: buildRepoPath(repoSource, 'scripts/evaluate.py'),
-      reason: `Fallback candidate to support the planned manual confirmation flow.`,
-      confidence: 'Low',
-    },
-  ]
-}
-
-function buildSampleCodeCandidates(
-  sample: DemoSample,
-  paragraph: ReaderParagraph,
-  repoSource: string,
-): CodeCandidate[] {
-  const paragraphTerms = extractTerms(paragraph.text).join(', ') || 'the active paragraph focus'
-
-  if (sample.id === 'segment-anything') {
-    return [
-      {
-        id: `${paragraph.id}-candidate-sam-1`,
-        symbol: 'SamPredictor',
-        path: buildRepoPath(repoSource, 'segment_anything/predictor.py'),
-        reason: `Strong candidate when the paragraph discusses promptable interaction, prediction flow, or user-guided masks. Current paragraph terms: ${paragraphTerms}.`,
-        confidence: 'High',
-      },
-      {
-        id: `${paragraph.id}-candidate-sam-2`,
-        symbol: 'SamAutomaticMaskGenerator',
-        path: buildRepoPath(repoSource, 'segment_anything/automatic_mask_generator.py'),
-        reason: 'Good fit for paragraphs about automatic mask generation, large-scale segmentation output, or prompt-free usage.',
-        confidence: 'High',
-      },
-      {
-        id: `${paragraph.id}-candidate-sam-3`,
-        symbol: 'export_onnx_model.py',
-        path: buildRepoPath(repoSource, 'scripts/export_onnx_model.py'),
-        reason: 'Useful when the paragraph references deployment, lightweight decoding, browser inference, or the web demo path.',
-        confidence: 'Medium',
-      },
-    ]
-  }
-
-  if (sample.id === 'lora') {
-    return [
-      {
-        id: `${paragraph.id}-candidate-lora-1`,
-        symbol: 'loralib.Linear',
-        path: buildRepoPath(repoSource, 'loralib/layers.py'),
-        reason: 'Best candidate for paragraphs that discuss rank decomposition, injected trainable matrices, or adapted linear layers.',
-        confidence: 'High',
-      },
-      {
-        id: `${paragraph.id}-candidate-lora-2`,
-        symbol: 'MergedLinear',
-        path: buildRepoPath(repoSource, 'loralib/layers.py'),
-        reason: 'Useful when the paragraph mentions fused qkv projections or implementation-specific attention projections.',
-        confidence: 'Medium',
-      },
-      {
-        id: `${paragraph.id}-candidate-lora-3`,
-        symbol: 'examples/NLG',
-        path: buildRepoPath(repoSource, 'examples/NLG/'),
-        reason: 'Useful when the paragraph shifts from method description to reproduction and downstream experiment setup.',
-        confidence: 'Medium',
-      },
-    ]
-  }
-
-  if (sample.id === 'clip') {
-    return [
-      {
-        id: `${paragraph.id}-candidate-clip-1`,
-        symbol: 'encode_image',
-        path: buildRepoPath(repoSource, 'clip/model.py'),
-        reason: 'Strong candidate when the paragraph talks about image representation extraction or visual encoder behavior.',
-        confidence: 'High',
-      },
-      {
-        id: `${paragraph.id}-candidate-clip-2`,
-        symbol: 'encode_text',
-        path: buildRepoPath(repoSource, 'clip/model.py'),
-        reason: 'Useful when the paragraph emphasizes text supervision, prompt text, or language-side embeddings.',
-        confidence: 'High',
-      },
-      {
-        id: `${paragraph.id}-candidate-clip-3`,
-        symbol: 'clip.load',
-        path: buildRepoPath(repoSource, 'clip/clip.py'),
-        reason: 'Useful when the paragraph is closer to zero-shot evaluation or quickstart-style usage rather than architecture details.',
-        confidence: 'Medium',
-      },
-    ]
-  }
-
-  return []
-}
-
 function resolveParagraphId(
   snapshot: ReaderPageSnapshot,
   preferredParagraphId?: string,
@@ -1129,16 +1110,6 @@ function queueParagraphScroll(
       behavior,
     })
   })
-}
-
-function extractTerms(text: string): string[] {
-  const titleCaseMatches = text.match(/\b[A-Z][A-Za-z0-9-]{2,}\b/g) ?? []
-  const lowercaseKeywords = text
-    .toLowerCase()
-    .match(/\b(model|dataset|training|module|loss|encoder|decoder|experiment|prompt|retrieval)\b/g) ?? []
-
-  const uniqueTerms = new Set([...titleCaseMatches, ...lowercaseKeywords])
-  return Array.from(uniqueTerms).slice(0, 5)
 }
 
 function mapRepoKindToAttribution(kind: 'github' | 'local' | 'unknown'): EvidenceAttribution {
@@ -1222,25 +1193,17 @@ function formatIdeaTime(value: string): string {
   })
 }
 
-function buildRepoPath(repoSource: string, relativePath: string): string {
-  const trimmedSource = repoSource.trim().replace(/\/+$/, '')
-  const trimmedPath = relativePath.replace(/^\/+/, '')
-
-  if (!trimmedSource) {
-    return `repo/${trimmedPath}`
+function summarizeRepoSnippet(text: string): string {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) {
+    return 'No text preview available.'
   }
 
-  return `${trimmedSource}/${trimmedPath}`
-}
+  if (normalized.length <= 180) {
+    return normalized
+  }
 
-function slugify(value: string): string {
-  const slug = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-
-  return slug || 'module'
+  return `${normalized.slice(0, 177)}...`
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {
