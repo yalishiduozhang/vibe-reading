@@ -2,7 +2,7 @@
 
 文档状态：Approved Baseline  
 最后更新：2026-03-24  
-当前阶段：Phase 1 kickoff / Reader Core preparation  
+当前阶段：Phase 2 kickoff / Reader Core MVP  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
 ## 1. 文档目的
@@ -63,6 +63,8 @@ P0 功能为：
 - 开源生态调研：`docs/opensource_reference_research.md`
 - 已有实现覆盖度矩阵：`docs/existing_implementation_gap_matrix.md`
 - 功能边界文档：`docs/feature_scope_v1.md`
+- 信息架构文档：`docs/information_architecture.md`
+- 低保真线框文档：`docs/wireframes_v1.md`
 - 初始 idea 原始资料：`docs/idea1.md`、`docs/idea2.md`
 
 这意味着：
@@ -70,7 +72,8 @@ P0 功能为：
 - 项目问题定义已经完成
 - 竞品/参考开源调研已经完成
 - 第一版功能边界已经初步收敛
-- 现在正式进入执行期
+- 第一轮信息架构与交互蓝图已经成形
+- 现在正式进入 Reader Core 执行期
 
 ## 4. 项目目标
 
@@ -446,7 +449,7 @@ AI 任务拆分为：
 
 #### 当前状态
 
-- 进行中
+- 已完成
 
 ### Phase 2：Reader Core MVP
 
@@ -473,6 +476,10 @@ AI 任务拆分为：
 - 支持普通学术 PDF 阅读
 - 页面滚动后锚点不明显漂移
 - 能从段落 ID 回跳到原文位置
+
+#### 当前状态
+
+- 进行中
 
 ### Phase 3：内联辅助与证据链 MVP
 
@@ -584,8 +591,8 @@ AI 任务拆分为：
 | 里程碑 | 内容 | 状态 | 通过标准 |
 | --- | --- | --- | --- |
 | M0 | 计划与文档冻结 | Completed | `plan.md` 获批，文档与仓库基线完成 |
-| M1 | 信息架构与原型蓝图 | In Progress | 核心页面、流程与前端骨架确定 |
-| M2 | Reader Core 可用 | Pending | PDF + 段落锚点可演示 |
+| M1 | 信息架构与原型蓝图 | Completed | 核心页面、流程、线框与前端骨架确定 |
+| M2 | Reader Core 可用 | In Progress | PDF + 段落锚点可演示 |
 | M3 | 内联辅助与证据链可用 | Pending | 卡片和回跳可演示 |
 | M4 | 论文-代码联动可用 | Pending | 至少 1 个真实案例跑通 |
 | M5 | Idea 工作台可用 | Pending | idea -> 文档闭环跑通 |
@@ -707,7 +714,7 @@ AI 任务拆分为：
 - M0 已完成
 - 可以正式进入实现阶段
 
-### 2026-03-24 / Phase 1 kickoff
+### 2026-03-24 / Phase 1 已完成
 
 #### 已完成
 
@@ -718,16 +725,27 @@ AI 任务拆分为：
 - 安装前端依赖
 - 完成 `npm run build`
 - 完成 `npm run lint`
+- 输出 `docs/information_architecture.md`
+- 输出 `docs/wireframes_v1.md`
+
+#### 结论
+
+- M1 已完成
+- Reader Core 开发边界与主界面结构已经具备基线
+
+### 2026-03-24 / Phase 2 kickoff
 
 #### 当前状态
 
 - 前端骨架已可运行、可构建、可继续承接 Reader Core
+- 已明确 Reader Workspace 的结构、主任务流和关键线框
 - 尚未开始 PDF 渲染与段落锚点实现
 
 #### 下一步
 
-- 补充信息架构和关键页面线框
-- 开始 Reader Core MVP：先接入 PDF 渲染与基础阅读视图
+- 选择并接入 PDF 渲染底层
+- 建立 Workspace 页面骨架
+- 启动段落锚点与基础阅读视图实现
 
 ## 15. 决策记录
 
@@ -785,9 +803,18 @@ AI 任务拆分为：
 - 这样更符合当前逐步推进、分阶段验收的协作方式。
 - 可以在每个突破点形成可回滚的本地里程碑。
 
+### D-007（2026-03-24）
+
+决定：Reader Workspace 采用“PDF 主体区 + Context/Code 近场侧栏 + Idea Workspace 次级区”的工作台结构。
+
+原因：
+
+- 这样最能同时承载三大主线。
+- 可以避免界面退化成“左 PDF，右聊天框”的普通形态。
+
 ## 16. 当前开放问题
 
-这些问题不阻塞当前执行，但会影响后续 Phase 1 或 Phase 2 的细化实现：
+这些问题不阻塞当前执行，但会影响后续 Phase 2 的细化实现：
 
 1. Reader Core 的段落切分第一版只用规则，还是直接引入 Docling？
 2. 代码联动第一版是否支持仓库全文本索引，还是只做结构索引？
@@ -808,8 +835,8 @@ AI 任务拆分为：
 
 接下来应按以下顺序继续：
 
-1. 补充信息架构图与关键页面线框
-2. 启动 Reader Core MVP
+1. 选择并接入 PDF 渲染底层
+2. 建立 Workspace 页面骨架
 3. 选择示范论文与对应代码仓库样本
-4. 建立 PDF 渲染、段落锚点与基础阅读视图
+4. 实现 PDF 渲染、基础阅读视图与段落锚点雏形
 5. 在形成下一次阶段性突破后做本地提交
