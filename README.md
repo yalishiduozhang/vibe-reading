@@ -8,12 +8,20 @@ OpenVibeRead is an open-source research reading workbench focused on three linke
 
 ## Current Status
 
-The project is in the approved planning and initial scaffold stage.
+The project has moved past planning and is now in an active MVP implementation cycle.
 
-Primary planning documents live in [`docs/`](./docs):
+Current focus:
+
+- Stable PDF reading with paragraph anchors and jump-back behavior
+- Evidence-backed context cards in the reading workspace
+- Demo-sample selection for paper-to-code linking
+- Repo-source normalization and confirmation-memory scaffolding
+
+Primary planning and research documents live in [`docs/`](./docs):
 
 - [`docs/plan.md`](./docs/plan.md)
 - [`docs/feature_scope_v1.md`](./docs/feature_scope_v1.md)
+- [`docs/demo_sample_candidates.md`](./docs/demo_sample_candidates.md)
 - [`docs/opensource_reference_research.md`](./docs/opensource_reference_research.md)
 - [`docs/existing_implementation_gap_matrix.md`](./docs/existing_implementation_gap_matrix.md)
 - [`docs/research_archive.md`](./docs/research_archive.md)

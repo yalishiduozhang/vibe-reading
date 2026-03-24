@@ -1,8 +1,8 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-24 21:39 (Asia/Shanghai)  
-当前阶段：Phase 2 in progress / Reader Core MVP  
+最后更新：2026-03-24 22:03 (Asia/Shanghai)  
+当前阶段：Phase 3 prep + Phase 4 groundwork in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
 ## 1. 文档目的
@@ -65,6 +65,7 @@ P0 功能为：
 - 功能边界文档：`docs/feature_scope_v1.md`
 - 信息架构文档：`docs/information_architecture.md`
 - 低保真线框文档：`docs/wireframes_v1.md`
+- 论文-代码联动示范样本基线：`docs/demo_sample_candidates.md`
 - 初始 idea 原始资料：`docs/idea1.md`、`docs/idea2.md`
 
 这意味着：
@@ -592,7 +593,7 @@ AI 任务拆分为：
 | --- | --- | --- | --- |
 | M0 | 计划与文档冻结 | Completed | `plan.md` 获批，文档与仓库基线完成 |
 | M1 | 信息架构与原型蓝图 | Completed | 核心页面、流程、线框与前端骨架确定 |
-| M2 | Reader Core 可用 | In Progress | PDF + 当前页段落锚点可演示，待补强回跳与多页状态 |
+| M2 | Reader Core 可用 | Completed | 稳定 PDF 阅读、段落锚点、多页状态记忆与回跳能力已经可演示 |
 | M3 | 内联辅助与证据链可用 | Pending | 卡片和回跳可演示 |
 | M4 | 论文-代码联动可用 | Pending | 至少 1 个真实案例跑通 |
 | M5 | Idea 工作台可用 | Pending | idea -> 文档闭环跑通 |
@@ -815,6 +816,34 @@ AI 任务拆分为：
 - 开始 WP-D：定义 repo 输入边界、归一化规则与首轮索引信号
 - 在形成真实 repo 联动的首个可演示版本后再次提交
 
+
+### 2026-03-24 22:03 / Phase 2-4 bridge milestone #3
+
+#### 已完成
+
+- 输出 `docs/demo_sample_candidates.md`，比较 `Segment Anything`、`LoRA`、`CLIP` 三组候选，并冻结 `Segment Anything` 为主样本
+- 在 `src/features/code-link/demoSamples.ts` 中固化 demo sample 元数据，接入 Workspace 的示范样本选择器
+- 在 `src/features/code-link/source.ts` 中补强 repo 输入分类与 GitHub URL 归一化，明确 repo root 作为首轮索引边界
+- 在 `src/features/code-link/mappings.ts` 中定义人工确认结果的持久化字段，并接入 `localStorage`
+- 让 Code 面板具备 Demo Pair、Source Analysis、Confirmation Memory 三段结构
+- 为代码候选加入 sample-aware 启发式映射，并支持 `Confirm / Dismiss` 决策记忆
+- 更新首页、`README.md` 与 demo 样本文档，保证文档状态和实际实现同步
+- 完成 `npm run build`
+- 完成 `npm run lint`
+
+#### 当前判断
+
+- WP-C 已完成，论文-代码联动 MVP 的首个演示样本已经冻结
+- WP-D 已完成第一轮输入边界与持久化设计，后续不需要再回到“先支持什么 repo 输入”的讨论
+- M2 可以判定为完成，Reader Core 不再是当前阶段的主阻塞项
+- 下一阶段的关键路径已经转到“真实 GitHub repo 索引”与“idea -> 文档骨架”
+
+#### 下一步
+
+- 基于主样本实现第一轮真实 GitHub repo 索引：repo tree、README、关键源码文件
+- 用真实 repo artifact 替换当前 sample-aware 启发式候选
+- 为 Idea 工作台准备最小 Composer 骨架，避免后续文档生成链路堵塞
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -910,15 +939,43 @@ AI 任务拆分为：
 - 如果先堆 UI，后面接模型时很容易推翻已有实现。
 - Context 面板和未来 inline card 应共享同一套证据链结构。
 
+
+### D-011（2026-03-24）
+
+决定：论文-代码联动 MVP 的主样本冻结为 `Segment Anything + facebookresearch/segment-anything`。
+
+原因：
+
+- 这组样本在论文术语、仓库结构和演示直观性之间最平衡。
+- 第一版可以先做结构级索引，不依赖重训练环境。
+
+### D-012（2026-03-24）
+
+决定：Web-first 原型中，GitHub 输入统一先归一化到 repo root，本地路径保留为“已接受但需 bridge”的输入形态。
+
+原因：
+
+- 这样可以先固定远程索引边界，避免 tree/blob/ssh 形态把 MVP 弄复杂。
+- 同时保留本地路径入口，不会把桌面桥接路线彻底排除在后续之外。
+
+### D-013（2026-03-24）
+
+决定：真实 repo 索引完成前，先把 `Confirm / Dismiss` 结果做成可持久化的 confirmation memory。
+
+原因：
+
+- 论文-代码联动第一版的核心不是“自动猜得多准”，而是“人工修正后能留下来并复用”。
+- 这样后续把启发式候选替换成真实索引候选时，不需要推翻用户已经确认的结果。
+
 ## 16. 当前开放问题
 
-这些问题不阻塞当前执行，但会影响后续 Phase 2 的细化实现：
+这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
 
 1. Reader Core 的段落切分第一版只用规则，还是直接引入 Docling？
 2. 代码联动第一版是否支持仓库全文本索引，还是只做结构索引？
 3. 第一版图表解释是否进 Phase 6，还是提前做一个轻量版？
 4. 桌面壳何时介入，是否在 Web 原型稳定后再评估？
-5. 第一版示范论文与示范仓库应选择哪一组，才能最稳定体现论文-代码联动能力？
+5. GitHub 远程索引第一轮是只抓 repo tree + README，还是同步抽取少量关键源码文件？
 6. Web-first 原型里，本地仓库读取是先通过后端桥接，还是先以 GitHub URL 演示为主？
 
 ## 17. 审批后的固定规则
@@ -934,82 +991,79 @@ AI 任务拆分为：
 
 接下来应按以下顺序继续：
 
-1. 开始 WP-C：选择 2 到 3 组论文 + 仓库候选，并锁定 1 组主样本。
-2. 开始 WP-D：定义 repo 输入边界、GitHub URL 归一化规则和首轮索引信号。
-3. 在代码联动面板中接入真实的 source classification 与索引准备信息。
-4. 评估是否需要为 Composer 提前建立最小页面骨架，避免后续 idea 工作流堵塞。
+1. 基于主样本开始真实 GitHub repo 索引：先做 repo tree、README 与关键源码文件的远程抓取策略。
+2. 将当前 sample-aware 候选映射逐步替换为真实 repo artifact 驱动的候选生成。
+3. 为 Idea 工作台提前设计最小 Composer 骨架，避免后续 idea -> 文档链路堵塞。
+4. 评估是否需要把代码联动结果抽成独立 store，避免后续扩展时页面状态过重。
 5. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
 
-## 19. 当前迭代执行拆解（Iteration A）
+## 19. 当前迭代执行拆解（Iteration B）
 
-时间范围：自 `2026-03-24 21:21` 起，持续到下一次阶段性本地提交。
-定位：这一轮不追求新增很多表面功能，而是把 Reader Core 从“能演示”补强到“更稳、更可扩展”。
+时间范围：自 `2026-03-24 22:03` 起，持续到下一次阶段性本地提交。  
+定位：这一轮开始把“样本感知的启发式 demo”推进到“真实 repo artifact 驱动的联动 prototype”，同时为 idea -> 文档链路提前打底。
 
-### WP-A：Reader Core 补强
+### WP-E：GitHub 远程索引 MVP
 
-目标：补强段落锚点系统，使后续内联卡片、证据链和回跳机制有稳定落点。
-
-任务：
-
-1. 固定段落锚点 ID 规则，避免翻页或重渲染后锚点身份漂移。
-2. 引入最小多页快照缓存，避免每次翻页后丢失当前页上下文。
-3. 增加段落回跳能力，从侧栏或后续卡片返回对应段落位置。
-4. 用至少 2 篇 PDF 做验证，其中至少 1 篇为多栏论文。
-
-完成标准：
-
-- 当前页段落重新渲染后仍能保持稳定选中状态。
-- 翻页再返回时，段落列表和锚点不出现明显错位。
-- 能从段落相关 UI 回到对应锚点位置。
-
-### WP-B：内联辅助与证据链数据层准备
-
-目标：为 Phase 3 的内联辅助卡片准备稳定数据结构，而不是先堆随机 UI。
+目标：让主样本仓库的远程结构信息真正进入系统，而不是继续只靠手写候选。
 
 任务：
 
-1. 定义 explanation card 的最小字段集合。
-2. 定义 evidence ref 格式，至少覆盖页码、段落 ID、句子范围。
-3. 定义输出标签规则，明确区分原文摘取、归纳总结、模型推断。
-4. 让 Workspace 侧栏能消费这套最小数据结构。
+1. 设计 GitHub 远程索引的最小拉取链路：repo root、repo tree、README、少量关键源码文件。
+2. 先支持主样本 `facebookresearch/segment-anything`，保证至少 1 个真实案例跑通。
+3. 定义远程 artifact 的最小结构，供 Code 面板和后续映射逻辑复用。
+4. 为远程索引结果加入最小缓存，避免同一 repo 每次都重新拉取。
 
 完成标准：
 
-- 数据结构能同时支撑 Context 面板和后续 inline card。
-- 同一条解释能明确标出 evidence 来源。
-- 后续接入模型时，不需要推翻当前 schema。
+- 输入主样本 repo 后，系统能拿到真实的 repo artifact，而不是纯前端占位信息。
+- Code 面板能展示至少一部分真实 tree / README / file-level 线索。
 
-### WP-C：示范样本选择
+### WP-F：真实候选生成替换
 
-目标：尽快锁定 1 组论文 + 代码仓库样本，避免后续功能在抽象环境里空转。
+目标：把当前 sample-aware 启发式候选逐步替换为“真实 artifact + 术语匹配”的候选生成。
 
 任务：
 
-1. 选出 2 到 3 组候选论文与仓库。
-2. 比较它们的术语一致性、仓库结构清晰度、实验配置可读性。
-3. 选定 1 组主样本作为论文-代码联动 MVP 的首个演示对象。
-4. 将选择理由记录进 `docs/plan.md` 或后续专项文档。
+1. 让候选生成消费远程 repo artifact，而不是只消费样本预设。
+2. 明确第一轮候选来源：术语相似、路径语义、README 提示、关键源码文件命中。
+3. 保持 `Confirm / Dismiss` 持久化结果兼容，不推翻已有 confirmation memory。
+4. 至少在主样本上完成一次真实候选 -> 人工确认 -> 回跳展示。
 
 完成标准：
 
-- 至少有 1 组样本适合做真实 repo 索引与候选映射演示。
-- 样本不依赖过重环境即可完成结构级分析。
+- 代码候选不再完全依赖预设样本常量。
+- 人工确认后的结果仍能稳定回跳到论文段落。
 
-### WP-D：代码联动 MVP 前置设计
+### WP-G：Idea Composer 骨架
 
-目标：在进入真实 repo 索引前，先固定最小输入边界和映射链路。
+目标：在不脱离当前工作台的前提下，为后续 idea -> 文档闭环建立最小骨架。
 
 任务：
 
-1. 固定 repo 输入形态：本地路径优先，GitHub URL 次之。
-2. 固定首轮解析范围：repo tree、README、config、关键源码文件。
-3. 固定候选映射来源：术语相似、路径语义、配置命中、README 提示。
-4. 固定人工确认后的持久化字段设计。
+1. 明确 Composer 是独立页面还是工作台内展开区域。
+2. 设计 idea 选集的数据结构，支持多条 idea 合并生成文档草稿。
+3. 先实现最小文档草稿视图，哪怕仍使用本地规则模板。
+4. 预留后续 Markdown 导出和 AI 扩展接口位置。
 
 完成标准：
 
-- 代码联动 MVP 的输入输出边界明确。
-- 后续实现时不会再次回到“到底先支持什么”的讨论。
+- Idea 工作台不再只停留在“记录”，而是开始具备“整理成文档”的落点。
+- 后续接入 AI 文档扩展时，不需要推翻当前骨架。
+
+### WP-H：状态与模块边界补强
+
+目标：避免 `WorkspacePage` 在继续扩展后变成单文件瓶颈。
+
+任务：
+
+1. 评估是否把代码联动状态抽成独立 store 或 feature module。
+2. 逐步把 demo sample、repo artifact、confirmation memory 的逻辑从页面层下沉。
+3. 为后续 Composer 接入保留清晰的数据边界。
+
+完成标准：
+
+- 页面层继续可维护。
+- 后续继续推进 Phase 4 / Phase 5 时，不需要大规模返工页面结构。
 
 ## 20. 本轮文档维护规则补充
 

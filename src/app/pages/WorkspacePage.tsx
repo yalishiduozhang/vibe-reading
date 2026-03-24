@@ -2,6 +2,23 @@ import { startTransition, useEffect, useId, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
 
+import {
+  demoSamples,
+  getDemoSampleById,
+  matchDemoSampleBySource,
+  primaryDemoSampleId,
+  type DemoSample,
+  type DemoSampleId,
+} from '../../features/code-link/demoSamples'
+import {
+  buildCodeLinkDecision,
+  getCandidateDecisionKey,
+  loadStoredCodeLinkDecisions,
+  saveStoredCodeLinkDecisions,
+  type CodeLinkDecisionKind,
+  type StoredCodeLinkDecision,
+} from '../../features/code-link/mappings'
+import { analyzeRepoSource } from '../../features/code-link/source'
 import { buildContextCard, formatEvidenceRef } from '../../features/reader/context'
 import { loadPdfDocument, renderPdfPage } from '../../features/reader/pdf'
 import type { LoadedPdfDocument } from '../../features/reader/pdf'
@@ -35,6 +52,7 @@ export default function WorkspacePage() {
 
   const [intent, setIntent] = useState<ReadingIntent>('Method deep dive')
   const [assistTab, setAssistTab] = useState<AssistTab>('context')
+  const [selectedDemoSampleId, setSelectedDemoSampleId] = useState<DemoSampleId>(primaryDemoSampleId)
   const [repoSource, setRepoSource] = useState(() => loadStoredRepo())
   const [pdfFile, setPdfFile] = useState<File | null>(null)
   const [documentProxy, setDocumentProxy] = useState<LoadedPdfDocument | null>(null)
@@ -43,6 +61,9 @@ export default function WorkspacePage() {
   const [renderedIntent, setRenderedIntent] = useState<ReadingIntent | null>(null)
   const [selectedParagraphId, setSelectedParagraphId] = useState('')
   const [ideas, setIdeas] = useState<StoredIdea[]>(() => loadStoredIdeas())
+  const [codeLinkDecisions, setCodeLinkDecisions] = useState<StoredCodeLinkDecision[]>(() =>
+    loadStoredCodeLinkDecisions(),
+  )
   const [cachedPageCount, setCachedPageCount] = useState(0)
   const [draftIdea, setDraftIdea] = useState('')
   const [draftTag, setDraftTag] = useState<IdeaTag>('Improvement')
@@ -167,12 +188,47 @@ export default function WorkspacePage() {
     window.localStorage.setItem(repoStorageKey, repoSource)
   }, [repoSource])
 
+  useEffect(() => {
+    saveStoredCodeLinkDecisions(codeLinkDecisions)
+  }, [codeLinkDecisions])
+
   const selectedParagraph =
     pageSnapshot?.paragraphs.find((paragraph) => paragraph.id === selectedParagraphId) ??
     pageSnapshot?.paragraphs[0] ??
     null
+  const selectedDemoSample = getDemoSampleById(selectedDemoSampleId)
   const contextCard = buildContextCard(selectedParagraph, intent)
-  const codeCandidates = buildCodeCandidates(selectedParagraph, repoSource)
+  const repoAnalysis = analyzeRepoSource(repoSource)
+  const matchedDemoSample =
+    matchDemoSampleBySource(repoAnalysis.normalizedSource || repoSource) ?? selectedDemoSample
+  const effectiveRepoSource = repoAnalysis.normalizedSource || repoSource.trim() || matchedDemoSample.repoUrl
+  const codeCandidates = buildCodeCandidates(selectedParagraph, effectiveRepoSource, matchedDemoSample)
+  const paragraphDecisionKeys = new Set(
+    selectedParagraph
+      ? codeLinkDecisions
+          .filter(
+            (decision) =>
+              decision.repoSource === effectiveRepoSource && decision.paragraphId === selectedParagraph.id,
+          )
+          .map((decision) => decision.candidateKey)
+      : [],
+  )
+  const visibleCodeCandidates = selectedParagraph
+    ? codeCandidates.filter(
+        (candidate) => !paragraphDecisionKeys.has(getCandidateDecisionKey(candidate, selectedParagraph)),
+      )
+    : []
+  const repoConfirmedDecisions = codeLinkDecisions.filter(
+    (decision) => decision.repoSource === effectiveRepoSource && decision.decision === 'confirmed',
+  )
+  const paragraphRejectedCount = selectedParagraph
+    ? codeLinkDecisions.filter(
+        (decision) =>
+          decision.repoSource === effectiveRepoSource &&
+          decision.paragraphId === selectedParagraph.id &&
+          decision.decision === 'rejected',
+      ).length
+    : 0
   const pageStatus = documentProxy ? `Page ${currentPage} / ${documentProxy.numPages}` : 'No PDF loaded'
   const isRenderingPage =
     Boolean(documentProxy) &&
@@ -216,6 +272,15 @@ export default function WorkspacePage() {
     setError(null)
     hydrateCachedSnapshot(currentPage, nextIntent)
     setIntent(nextIntent)
+  }
+
+  function handleDemoSampleChange(event: ChangeEvent<HTMLSelectElement>) {
+    const nextSampleId = event.target.value as DemoSampleId
+    const nextSample = getDemoSampleById(nextSampleId)
+
+    setSelectedDemoSampleId(nextSampleId)
+    setAssistTab('code')
+    setRepoSource(nextSample.repoUrl)
   }
 
   function handlePreviousPage() {
@@ -269,25 +334,58 @@ export default function WorkspacePage() {
     })
   }
 
-  function handleJumpToIdea(idea: StoredIdea) {
-    setAssistTab('context')
+  function jumpToParagraph(pageNumber: number, paragraphId: string, nextTab: AssistTab) {
+    setAssistTab(nextTab)
 
-    if (idea.pageNumber === currentPage) {
-      handleParagraphSelect(idea.paragraphId, 'context')
+    if (pageNumber === currentPage) {
+      handleParagraphSelect(paragraphId, nextTab)
       return
     }
 
-    selectedByPageRef.current[idea.pageNumber] = idea.paragraphId
+    selectedByPageRef.current[pageNumber] = paragraphId
     pendingJumpRef.current = {
-      pageNumber: idea.pageNumber,
-      paragraphId: idea.paragraphId,
+      pageNumber,
+      paragraphId,
     }
-    hydrateCachedSnapshot(idea.pageNumber, intent, idea.paragraphId)
-    setCurrentPage(idea.pageNumber)
+    hydrateCachedSnapshot(pageNumber, intent, paragraphId)
+    setCurrentPage(pageNumber)
   }
 
-  function handleJumpToEvidence(paragraphId: string) {
-    handleParagraphSelect(paragraphId, 'context')
+  function handleJumpToIdea(idea: StoredIdea) {
+    jumpToParagraph(idea.pageNumber, idea.paragraphId, 'context')
+  }
+
+  function handleJumpToEvidence(pageNumber: number, paragraphId: string) {
+    jumpToParagraph(pageNumber, paragraphId, 'context')
+  }
+
+  function handleJumpToConfirmedCodeLink(decision: StoredCodeLinkDecision) {
+    jumpToParagraph(decision.pageNumber, decision.paragraphId, 'code')
+  }
+
+  function handleCodeDecision(candidate: CodeCandidate, decision: CodeLinkDecisionKind) {
+    if (!selectedParagraph) {
+      return
+    }
+
+    const nextDecision = buildCodeLinkDecision(
+      candidate,
+      selectedParagraph,
+      effectiveRepoSource,
+      matchedDemoSample.id,
+      decision,
+    )
+
+    setCodeLinkDecisions((currentDecisions) => [
+      nextDecision,
+      ...currentDecisions.filter(
+        (currentDecision) =>
+          !(
+            currentDecision.repoSource === nextDecision.repoSource &&
+            currentDecision.candidateKey === nextDecision.candidateKey
+          ),
+      ),
+    ])
   }
 
   function handleSaveIdea() {
@@ -576,7 +674,7 @@ export default function WorkspacePage() {
                           <p>{reference.excerpt}</p>
                           <button
                             className="ghost-button ghost-button-small"
-                            onClick={() => handleJumpToEvidence(reference.paragraphId)}
+                            onClick={() => handleJumpToEvidence(reference.pageNumber, reference.paragraphId)}
                             type="button"
                           >
                             Jump to Paragraph
@@ -597,35 +695,161 @@ export default function WorkspacePage() {
             <div className="code-panel-content">
               <div className="panel-subhead panel-subhead-column">
                 <h3>Repository mapping candidates</h3>
-                <span>{repoSource || 'Connect a repo source to ground the mapping view.'}</span>
+                <span>{repoAnalysis.displayLabel}</span>
               </div>
+              <section className="context-card-block repo-analysis-block">
+                <div className="context-block-head">
+                  <h3>Demo Pair</h3>
+                  <span
+                    className={`attribution-chip ${
+                      matchedDemoSample.badge === 'Primary'
+                        ? 'attribution-chip-summary'
+                        : 'attribution-chip-inference'
+                    }`}
+                  >
+                    {matchedDemoSample.badge}
+                  </span>
+                </div>
+                <label className="control-group">
+                  <span>Preset Sample</span>
+                  <select value={selectedDemoSampleId} onChange={handleDemoSampleChange}>
+                    {demoSamples.map((sample) => (
+                      <option key={sample.id} value={sample.id}>
+                        {sample.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <p>{matchedDemoSample.selectionSummary}</p>
+                <div className="demo-link-row">
+                  <a
+                    className="secondary-link secondary-link-inline"
+                    href={matchedDemoSample.paperUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Paper
+                  </a>
+                  <a
+                    className="secondary-link secondary-link-inline"
+                    href={matchedDemoSample.repoUrl}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    Repo
+                  </a>
+                </div>
+                <div className="repo-signal-list">
+                  {matchedDemoSample.mappingFocus.map((focus) => (
+                    <span key={focus} className="repo-signal-item">
+                      {focus}
+                    </span>
+                  ))}
+                </div>
+                <ul className="demo-strength-list">
+                  {matchedDemoSample.strengths.map((strength) => (
+                    <li key={strength}>{strength}</li>
+                  ))}
+                </ul>
+                <p className="repo-analysis-note">{matchedDemoSample.watchOut}</p>
+              </section>
+              <section className="context-card-block repo-analysis-block">
+                <div className="context-block-head">
+                  <h3>Source Analysis</h3>
+                  <span className={`attribution-chip attribution-chip-${mapRepoKindToAttribution(repoAnalysis.kind)}`}>
+                    {repoAnalysis.kind}
+                  </span>
+                </div>
+                <p>{repoAnalysis.readiness}</p>
+                <p className="repo-analysis-note">{repoAnalysis.normalizationNote}</p>
+                <p className="repo-analysis-note">{repoAnalysis.limitation}</p>
+                <div className="repo-signal-list">
+                  {repoAnalysis.indexSignals.map((signal) => (
+                    <span key={signal} className="repo-signal-item">
+                      {signal}
+                    </span>
+                  ))}
+                </div>
+              </section>
+              <section className="context-card-block repo-analysis-block">
+                <div className="context-block-head">
+                  <h3>Confirmation Memory</h3>
+                  <span>{repoConfirmedDecisions.length} confirmed</span>
+                </div>
+                {repoConfirmedDecisions.length ? (
+                  <div className="saved-mapping-list">
+                    {repoConfirmedDecisions.slice(0, 5).map((decision) => (
+                      <article key={decision.id} className="candidate-card candidate-card-compact">
+                        <div className="candidate-head">
+                          <strong>{decision.symbol}</strong>
+                          <span>{decision.confidence}</span>
+                        </div>
+                        <p className="candidate-path">{decision.path}</p>
+                        <p>{decision.paragraphLabel}</p>
+                        <button
+                          className="ghost-button ghost-button-small"
+                          onClick={() => handleJumpToConfirmedCodeLink(decision)}
+                          type="button"
+                        >
+                          Jump to Paragraph
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-inline-state">
+                    No confirmed mappings yet. Save one candidate and it will
+                    become reusable repo memory for this sample.
+                  </div>
+                )}
+              </section>
               {selectedParagraph ? (
                 <>
                   <p className="code-panel-note">
-                    Candidate mappings are still heuristic. This layer is now
-                    stable enough for the next step: replacing mock candidates
-                    with real repo indexing while keeping the paragraph binding
-                    intact.
+                    Candidate mappings are still heuristic, but the repo-source
+                    boundary is now explicit: GitHub roots are normalized, local
+                    paths are accepted as future bridge targets, and decisions
+                    are persisted as confirmation memory.
                   </p>
+                  <div className="panel-subhead">
+                    <h3>Active candidates</h3>
+                    <span>{visibleCodeCandidates.length} visible / {paragraphRejectedCount} dismissed</span>
+                  </div>
                   <div className="candidate-list">
-                    {codeCandidates.map((candidate) => (
-                      <article key={candidate.id} className="candidate-card">
-                        <div className="candidate-head">
-                          <strong>{candidate.symbol}</strong>
-                          <span>{candidate.confidence}</span>
-                        </div>
-                        <p className="candidate-path">{candidate.path}</p>
-                        <p>{candidate.reason}</p>
-                        <div className="candidate-actions">
-                          <button className="ghost-button ghost-button-small" type="button">
-                            Confirm
-                          </button>
-                          <button className="ghost-button ghost-button-small" type="button">
-                            Reject
-                          </button>
-                        </div>
-                      </article>
-                    ))}
+                    {visibleCodeCandidates.length ? (
+                      visibleCodeCandidates.map((candidate) => (
+                        <article key={candidate.id} className="candidate-card">
+                          <div className="candidate-head">
+                            <strong>{candidate.symbol}</strong>
+                            <span>{candidate.confidence}</span>
+                          </div>
+                          <p className="candidate-path">{candidate.path}</p>
+                          <p>{candidate.reason}</p>
+                          <div className="candidate-actions">
+                            <button
+                              className="ghost-button ghost-button-small"
+                              onClick={() => handleCodeDecision(candidate, 'confirmed')}
+                              type="button"
+                            >
+                              Confirm
+                            </button>
+                            <button
+                              className="ghost-button ghost-button-small"
+                              onClick={() => handleCodeDecision(candidate, 'rejected')}
+                              type="button"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                        </article>
+                      ))
+                    ) : (
+                      <div className="empty-inline-state">
+                        All current candidates already have a saved decision for
+                        this paragraph. Switch repo, sample, or paragraph to
+                        generate a fresh candidate set.
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (
@@ -738,39 +962,132 @@ function ContextFieldBlock({ attribution, body, title }: ContextFieldBlockProps)
 function buildCodeCandidates(
   paragraph: ReaderParagraph | null,
   repoSource: string,
+  sample: DemoSample | null,
 ): CodeCandidate[] {
   if (!paragraph) {
     return []
   }
 
+  const sampleCandidates = sample ? buildSampleCodeCandidates(sample, paragraph, repoSource) : []
+  if (sampleCandidates.length) {
+    return sampleCandidates
+  }
+
   const scope = extractTerms(paragraph.text)
   const primaryTerm = scope[0] ?? 'ReaderModule'
   const secondaryTerm = scope[1] ?? 'Config'
-  const repoHint = normalizeRepoHint(repoSource)
 
   return [
     {
       id: `${paragraph.id}-candidate-1`,
       symbol: `${primaryTerm}Block`,
-      path: `${repoHint}/src/${slugify(primaryTerm)}/core.py`,
+      path: buildRepoPath(repoSource, `src/${slugify(primaryTerm)}/core.py`),
       reason: `Name overlap between the paragraph focus and ${primaryTerm}. The paragraph carries the highest current-page priority score.`,
       confidence: 'High',
     },
     {
       id: `${paragraph.id}-candidate-2`,
       symbol: `${secondaryTerm.toLowerCase()}.yaml`,
-      path: `${repoHint}/configs/train.yaml`,
+      path: buildRepoPath(repoSource, 'configs/train.yaml'),
       reason: `Useful when the paragraph mixes implementation details and experiment setup language.`,
       confidence: 'Medium',
     },
     {
       id: `${paragraph.id}-candidate-3`,
       symbol: `${primaryTerm}Runner`,
-      path: `${repoHint}/scripts/evaluate.py`,
+      path: buildRepoPath(repoSource, 'scripts/evaluate.py'),
       reason: `Fallback candidate to support the planned manual confirmation flow.`,
       confidence: 'Low',
     },
   ]
+}
+
+function buildSampleCodeCandidates(
+  sample: DemoSample,
+  paragraph: ReaderParagraph,
+  repoSource: string,
+): CodeCandidate[] {
+  const paragraphTerms = extractTerms(paragraph.text).join(', ') || 'the active paragraph focus'
+
+  if (sample.id === 'segment-anything') {
+    return [
+      {
+        id: `${paragraph.id}-candidate-sam-1`,
+        symbol: 'SamPredictor',
+        path: buildRepoPath(repoSource, 'segment_anything/predictor.py'),
+        reason: `Strong candidate when the paragraph discusses promptable interaction, prediction flow, or user-guided masks. Current paragraph terms: ${paragraphTerms}.`,
+        confidence: 'High',
+      },
+      {
+        id: `${paragraph.id}-candidate-sam-2`,
+        symbol: 'SamAutomaticMaskGenerator',
+        path: buildRepoPath(repoSource, 'segment_anything/automatic_mask_generator.py'),
+        reason: 'Good fit for paragraphs about automatic mask generation, large-scale segmentation output, or prompt-free usage.',
+        confidence: 'High',
+      },
+      {
+        id: `${paragraph.id}-candidate-sam-3`,
+        symbol: 'export_onnx_model.py',
+        path: buildRepoPath(repoSource, 'scripts/export_onnx_model.py'),
+        reason: 'Useful when the paragraph references deployment, lightweight decoding, browser inference, or the web demo path.',
+        confidence: 'Medium',
+      },
+    ]
+  }
+
+  if (sample.id === 'lora') {
+    return [
+      {
+        id: `${paragraph.id}-candidate-lora-1`,
+        symbol: 'loralib.Linear',
+        path: buildRepoPath(repoSource, 'loralib/layers.py'),
+        reason: 'Best candidate for paragraphs that discuss rank decomposition, injected trainable matrices, or adapted linear layers.',
+        confidence: 'High',
+      },
+      {
+        id: `${paragraph.id}-candidate-lora-2`,
+        symbol: 'MergedLinear',
+        path: buildRepoPath(repoSource, 'loralib/layers.py'),
+        reason: 'Useful when the paragraph mentions fused qkv projections or implementation-specific attention projections.',
+        confidence: 'Medium',
+      },
+      {
+        id: `${paragraph.id}-candidate-lora-3`,
+        symbol: 'examples/NLG',
+        path: buildRepoPath(repoSource, 'examples/NLG/'),
+        reason: 'Useful when the paragraph shifts from method description to reproduction and downstream experiment setup.',
+        confidence: 'Medium',
+      },
+    ]
+  }
+
+  if (sample.id === 'clip') {
+    return [
+      {
+        id: `${paragraph.id}-candidate-clip-1`,
+        symbol: 'encode_image',
+        path: buildRepoPath(repoSource, 'clip/model.py'),
+        reason: 'Strong candidate when the paragraph talks about image representation extraction or visual encoder behavior.',
+        confidence: 'High',
+      },
+      {
+        id: `${paragraph.id}-candidate-clip-2`,
+        symbol: 'encode_text',
+        path: buildRepoPath(repoSource, 'clip/model.py'),
+        reason: 'Useful when the paragraph emphasizes text supervision, prompt text, or language-side embeddings.',
+        confidence: 'High',
+      },
+      {
+        id: `${paragraph.id}-candidate-clip-3`,
+        symbol: 'clip.load',
+        path: buildRepoPath(repoSource, 'clip/clip.py'),
+        reason: 'Useful when the paragraph is closer to zero-shot evaluation or quickstart-style usage rather than architecture details.',
+        confidence: 'Medium',
+      },
+    ]
+  }
+
+  return []
 }
 
 function resolveParagraphId(
@@ -822,6 +1139,18 @@ function extractTerms(text: string): string[] {
 
   const uniqueTerms = new Set([...titleCaseMatches, ...lowercaseKeywords])
   return Array.from(uniqueTerms).slice(0, 5)
+}
+
+function mapRepoKindToAttribution(kind: 'github' | 'local' | 'unknown'): EvidenceAttribution {
+  if (kind === 'github') {
+    return 'quoted'
+  }
+
+  if (kind === 'local') {
+    return 'summary'
+  }
+
+  return 'inference'
 }
 
 function countCachedPages(cache: Record<string, ReaderPageSnapshot>): number {
@@ -893,22 +1222,15 @@ function formatIdeaTime(value: string): string {
   })
 }
 
-function normalizeRepoHint(repoSource: string): string {
-  const trimmed = repoSource.trim()
-  if (!trimmed) {
-    return 'repo'
+function buildRepoPath(repoSource: string, relativePath: string): string {
+  const trimmedSource = repoSource.trim().replace(/\/+$/, '')
+  const trimmedPath = relativePath.replace(/^\/+/, '')
+
+  if (!trimmedSource) {
+    return `repo/${trimmedPath}`
   }
 
-  const normalized = trimmed
-    .replace(/^https?:\/\/github\.com\//, '')
-    .replace(/^git@github\.com:/, '')
-    .replace(/\.git$/, '')
-    .split('/')
-    .filter(Boolean)
-    .slice(-2)
-    .join('/')
-
-  return normalized || 'repo'
+  return `${trimmedSource}/${trimmedPath}`
 }
 
 function slugify(value: string): string {

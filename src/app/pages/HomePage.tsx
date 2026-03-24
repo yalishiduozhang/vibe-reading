@@ -31,7 +31,8 @@ const completedSteps = [
   'Approved planning baseline in docs/',
   'Open-source landscape research archived',
   'Information architecture and wireframes committed',
-  'Reader Core MVP is now in implementation',
+  'Reader Core anchors, evidence schema, and jump-back are working',
+  'Primary demo sample is now frozen for paper-to-code linking',
 ]
 
 export default function HomePage() {
@@ -56,11 +57,11 @@ export default function HomePage() {
         </div>
         <div className="hero-panel" id="phase-status">
           <span className="panel-label">Current Stage</span>
-          <strong>Phase 2: Reader Core MVP</strong>
+          <strong>Phase 2 to Phase 4 bridge</strong>
           <p>
-            The project has moved past planning. The active focus is stable PDF
-            reading, paragraph anchors, and a workspace layout that can support
-            inline assist, code mapping, and idea capture.
+            The reader core is stable enough to support the next layer: demo
+            paper selection, repo-source normalization, and confirmed paper-to-
+            code mapping memory inside the same workspace.
           </p>
         </div>
       </header>
@@ -111,9 +112,9 @@ export default function HomePage() {
             <h2>PDF first, then paragraph-aware interaction.</h2>
           </div>
           <p className="accent-copy">
-            The next milestone is a working reading workspace: a real PDF viewer,
-            paragraph anchors for the current page, and adjacent panels that are
-            already ready to host evidence, code links, and idea capture.
+            The active milestone is no longer just loading PDFs. The workspace is
+            now being tightened around a real demo pair, repo-source analysis,
+            confirmation memory, and the path toward true paper-to-code linking.
           </p>
         </section>
       </main>

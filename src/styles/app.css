@@ -675,6 +675,64 @@
   font-size: 0.84rem;
 }
 
+
+.repo-analysis-note {
+  margin: 0;
+  font-size: 0.84rem;
+  color: rgba(243, 239, 230, 0.66);
+}
+
+.repo-signal-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.repo-signal-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(243, 239, 230, 0.74);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.secondary-link-inline {
+  min-height: 38px;
+  padding-inline: 14px;
+}
+
+.demo-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.demo-strength-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 8px;
+}
+
+.demo-strength-list li {
+  color: rgba(243, 239, 230, 0.74);
+}
+
+.saved-mapping-list,
+.repo-analysis-block {
+  display: grid;
+  gap: 12px;
+}
+
+.candidate-card-compact {
+  padding: 14px;
+}
+
 @media (max-width: 1320px) {
   .workspace-topbar {
     grid-template-columns: 1fr;
