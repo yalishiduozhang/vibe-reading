@@ -1,0 +1,163 @@
+.page-shell {
+  min-height: 100vh;
+  padding: 40px 24px 64px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
+  gap: 24px;
+  max-width: 1180px;
+  margin: 0 auto 28px;
+}
+
+.hero-copy,
+.hero-panel,
+.card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background: rgba(17, 20, 24, 0.78);
+  box-shadow: 0 18px 80px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(14px);
+}
+
+.hero-copy {
+  padding: 32px;
+}
+
+.eyebrow,
+.panel-label,
+.section-kicker {
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
+  color: #d9b56d;
+}
+
+.hero h1 {
+  margin: 0;
+  max-width: 12ch;
+  font-size: clamp(2.8rem, 7vw, 5.2rem);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+}
+
+.hero-text {
+  margin: 20px 0 0;
+  max-width: 58ch;
+  color: rgba(243, 239, 230, 0.76);
+  font-size: 1.05rem;
+}
+
+.hero-panel {
+  padding: 28px;
+  align-self: stretch;
+}
+
+.hero-panel strong {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 1.45rem;
+}
+
+.hero-panel p {
+  margin: 0;
+  color: rgba(243, 239, 230, 0.72);
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.card {
+  padding: 28px;
+}
+
+.card-wide {
+  grid-column: span 2;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  letter-spacing: -0.03em;
+}
+
+.section-head {
+  margin-bottom: 20px;
+}
+
+.pillars-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.pillar-card {
+  border-radius: 20px;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pillar-card h3 {
+  margin: 0 0 12px;
+  font-size: 1.1rem;
+}
+
+.pillar-card p,
+.feature-list li,
+.accent-copy {
+  color: rgba(243, 239, 230, 0.76);
+}
+
+.feature-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 10px;
+}
+
+.feature-list-compact {
+  gap: 8px;
+}
+
+.accent-card {
+  background:
+    linear-gradient(135deg, rgba(217, 181, 109, 0.15), rgba(110, 153, 183, 0.08)),
+    rgba(17, 20, 24, 0.82);
+}
+
+.accent-copy {
+  max-width: 64ch;
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+@media (max-width: 900px) {
+  .hero,
+  .content-grid,
+  .pillars-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-wide {
+    grid-column: span 1;
+  }
+
+  .page-shell {
+    padding: 20px 16px 40px;
+  }
+
+  .hero-copy,
+  .hero-panel,
+  .card {
+    padding: 22px;
+    border-radius: 22px;
+  }
+}
