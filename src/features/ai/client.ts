@@ -1,4 +1,4 @@
-import { normalizeAiBaseUrl, type StoredAiConfig } from './storage'
+import { normalizeAiBaseUrl, type StoredAiConfig } from './storage.ts'
 
 export type AiChatMessage = {
   role: 'system' | 'user'

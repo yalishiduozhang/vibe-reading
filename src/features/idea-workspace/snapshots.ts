@@ -1,5 +1,5 @@
-import type { DraftMode } from './composer'
-import type { StoredComposerSnapshot } from './storage'
+import type { DraftMode } from './composer.ts'
+import type { StoredComposerSnapshot } from './storage.ts'
 
 export type SnapshotComparisonSummary = {
   note: string

@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 20:29 (Asia/Shanghai)  
+最后更新：2026-03-25 20:36 (Asia/Shanghai)
 当前阶段：Phase 3 completed + Phase 4 in progress + Phase 5 in progress + WP-H in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1899,6 +1899,38 @@ AI 任务拆分为：
 - 继续推进验证基础设施：评估是否为纯函数模块补最小自测入口，而不急着引入重测试栈
 - 继续推进 `M4` / `M5`：在可靠性收口后再扩功能，避免“边长功能边放大旧 bug”
 
+
+### 2026-03-25 20:36 / WP-H helper extraction + minimal test baseline
+
+#### 已完成
+
+- 新增 `src/features/idea-workspace/selectors.ts`，把 idea / snapshot / composer selection 相关的纯函数 helper 从 `WorkspacePage` 底部抽离到 feature 层
+- 新增 `src/features/ai/utils.ts`，把 AI context cache key 与 provider base URL 重置判定从页面层抽离
+- `WorkspacePage` 不再维护这批底部 helper 的定义，页面层继续缩小为“状态 + 接线 + 渲染”
+- 新增 `test/ai-storage.test.ts`、`test/ai-context.test.ts`、`test/idea-workspace-selectors.test.ts`、`test/snapshots.test.ts`
+- 当前自测已覆盖 AI 配置校验、cache key、provider base URL 逻辑、AI context JSON 解析、snapshot lineage / compare、selection key、snapshot filter、time filter 等纯逻辑
+- 在 `package.json` 中加入 `npm run test`
+- 修复 `eslint.config.js` 中原有的语法错误，避免 lint 链路本身失效
+- 当前已验证通过：`npm run test`、`npm run build`、`npm run lint`、`git diff --check`
+
+#### 当前判断
+
+- `WP-H` 已经不再只是“继续拆 helper”，而是开始把页面底部的零散纯逻辑系统性回收到 feature 模块
+- “最小自测入口”这个计划项可以视为已启动并形成基线，而且已经不只覆盖两个 helper 文件，后续继续补纯函数测试不需要从零搭链路
+- 当前最明确的剩余压力仍是 `WorkspacePage` 体量与功能密度，而不是验证入口缺失
+
+#### 遇到的问题
+
+- 目前自测只覆盖纯函数模块，还没有进入 React 交互层或端到端场景
+- `WorkspacePage` 构建后的 chunk 仍略高于 500 kB，说明仅靠 helper 抽离还不足以消化页面体积
+- 现有测试仍依赖 Node 直跑 TypeScript 模块，适合当前轻量阶段，但还不是完整测试体系
+
+#### 下一步
+
+- 继续推进 `WP-H`：优先拆 AI assist / composer / snapshot detail 这些局部状态密集区，而不再只拆底部 helper
+- 继续推进 `M4`：把注意力切回本地路径 / repo bridge 与 code-link 深度
+- 继续推进自测：沿着已建好的入口，优先补 `indexing.ts` 及 repo/index diagnostics 相关纯逻辑测试
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2339,6 +2371,15 @@ AI 任务拆分为：
 - 这类问题在原型阶段最容易被“build 能过”掩盖，但一旦用户开始频繁切段落、改配置、改草稿，就会直接影响可信度。
 - 先把这些状态边界补稳，后续继续推进 Phase 4 / Phase 5 时才不会反复回头补基础可靠性。
 
+### D-049（2026-03-25）
+
+决定：验证基础设施第一轮采用“Node 内建 test runner + TypeScript 直跑纯函数模块”的轻量路线，并优先覆盖 `ai/*` 与 `idea-workspace` 的 selector/helper。
+
+原因：
+
+- 当前更需要先把最容易回归的纯逻辑纳入可执行检查，而不是为了测试先引入一整套更重的框架和配置负担。
+- 这条路径与当前 Web-first、快速迭代的节奏兼容，同时已经足够支撑后续继续补 `indexing.ts`、`snapshots.ts` 等模块自测。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
@@ -2350,7 +2391,7 @@ AI 任务拆分为：
 5. 当前 `snapshot` 已具备 detail / duplicate / lineage 后，是否已经足够，还是仍需要升级为真正的 draft 实体与列表页？
 6. repo indexing / sample warm-up 下一步是抽成 custom hook / controller，还是继续维持“feature function + page state”的半下沉结构？
 7. Phase 3 当前采用浏览器直连 provider，后续是继续保持 local-first 直连，还是补 server proxy / backend bridge？
-8. 在不引入重测试栈的前提下，是否要先为 `ai/*`、`indexing.ts`、`snapshots.ts` 这类纯函数模块补最小自测入口？
+8. 最小自测入口已经建立后，下一批优先补 `indexing.ts`、`snapshots.ts`、`ai/context.ts`，还是先继续集中火力拆 `WorkspacePage`？
 
 ## 17. 审批后的固定规则
 
@@ -2367,7 +2408,7 @@ AI 任务拆分为：
 
 1. 继续推进 `WP-H`：评估是否把 repo indexing 的 loading / error / source 状态抽成 custom hook 或 controller，进一步压缩页面层异步编排。
 2. 继续推进 `WP-H`：开始清理 AI assist / snapshot detail / selection 这条线的页面状态密度，判断是否抽独立 action/helper 或局部 store。
-3. 继续推进验证基础设施：优先为纯函数模块设计最小自测入口，提升后续迭代时的回归把握。
+3. 继续推进验证基础设施：沿着现有 `npm run test` 补 `indexing.ts`、`snapshots.ts`、`ai/context.ts` 的纯逻辑测试。
 4. 继续推进 `M4`：在 Phase 3 已完成且可靠性补强后，把主火力切回 repo bridge、本地路径方案和 code-link 深度。
 5. 继续推进 `M5`：根据 snapshot detail / duplicate / lineage 的真实使用路径，决定是否升级为正式 draft 实体与列表页。
 6. 继续推进 Phase 3 后处理：评估 AI 结果是否需要持久化、prompt preset 是否需要拆分，以及是否引入 proxy/bridge。

@@ -11,12 +11,12 @@ import {
   getAiProviderLabel,
   getDefaultAiBaseUrl,
   loadStoredAiConfig,
-  normalizeAiBaseUrl,
   saveStoredAiConfig,
   type AiProviderKind,
   type AiResponseLanguage,
   type StoredAiConfig,
 } from '../../features/ai/storage'
+import { buildAiContextCacheKey, shouldResetAiBaseUrl } from '../../features/ai/utils'
 import { buildCodeCandidates } from '../../features/code-link/candidates'
 import {
   demoSamples,
@@ -79,6 +79,23 @@ import {
   buildSnapshotRelationSignals,
 } from '../../features/idea-workspace/snapshots'
 import {
+  buildComposerSelectionKey,
+  deriveSnapshotDocumentName,
+  deriveSnapshotIdeaTags,
+  getErrorMessage,
+  getIdeaDocumentName,
+  getSnapshotDocumentName,
+  getSnapshotTagSummary,
+  matchesIdeaSearch,
+  matchesIdeaTimeFilter,
+  matchesSnapshotSearch,
+  matchesSnapshotVisibility,
+  snapshotVisibilityFilters,
+  timeFilters,
+  type IdeaTimeFilter,
+  type SnapshotVisibilityFilter,
+} from '../../features/idea-workspace/selectors'
+import {
   clearStoredComposerDraft,
   loadStoredComposerDraft,
   loadStoredComposerSnapshots,
@@ -108,14 +125,10 @@ const repoStorageKey = 'openviberead.repo-source.v1'
 const allPapersFilterLabel = 'All papers'
 const allSnapshotPapersFilterLabel = 'All snapshot papers'
 const allTagsFilterLabel = 'All tags'
-const snapshotVisibilityFilters = ['All snapshots', 'Active only', 'Archived only'] as const
 const symbolCacheViewModes = ['Focused hits', 'All cached'] as const
-const timeFilters = ['All time', 'Last 24h', 'Last 7d'] as const
 
 type AssistTab = 'context' | 'code'
 type IdeaTagFilter = IdeaTag | typeof allTagsFilterLabel
-type IdeaTimeFilter = (typeof timeFilters)[number]
-type SnapshotVisibilityFilter = (typeof snapshotVisibilityFilters)[number]
 type SymbolCacheViewMode = (typeof symbolCacheViewModes)[number]
 type PendingJump = {
   pageNumber: number
@@ -3008,29 +3021,6 @@ function makeCacheKey(pageNumber: number, intent: ReadingIntent): string {
   return `${pageNumber}:${intent}`
 }
 
-function buildAiContextCacheKey(
-  paragraph: ReaderParagraph,
-  intent: ReadingIntent,
-  config: StoredAiConfig,
-): string {
-  return [
-    paragraph.id,
-    intent,
-    config.provider,
-    config.responseLanguage,
-    normalizeAiBaseUrl(config.baseUrl).toLowerCase(),
-    config.model.trim().toLowerCase(),
-    String(config.temperature),
-  ].join('::')
-}
-
-function shouldResetAiBaseUrl(config: StoredAiConfig): boolean {
-  return (
-    !normalizeAiBaseUrl(config.baseUrl) ||
-    normalizeAiBaseUrl(config.baseUrl) === normalizeAiBaseUrl(getDefaultAiBaseUrl(config.provider))
-  )
-}
-
 function loadStoredRepo(): string {
   if (typeof window === 'undefined') {
     return ''
@@ -3097,114 +3087,4 @@ function summarizeRepoSnippet(text: string): string {
   }
 
   return `${normalized.slice(0, 177)}...`
-}
-
-function getErrorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message.trim()) {
-    return error.message
-  }
-
-  return fallback
-}
-
-function getIdeaDocumentName(idea: StoredIdea): string {
-  return idea.documentName?.trim() || 'Unknown paper'
-}
-
-function getSnapshotDocumentName(snapshot: StoredComposerSnapshot): string {
-  return snapshot.documentName?.trim() || 'Unknown paper'
-}
-
-function getSnapshotTagSummary(snapshot: StoredComposerSnapshot): string {
-  if (!snapshot.ideaTags?.length) {
-    return 'No tags'
-  }
-
-  return snapshot.ideaTags.join(', ')
-}
-
-function matchesIdeaSearch(idea: StoredIdea, rawQuery: string): boolean {
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) {
-    return true
-  }
-
-  return [
-    idea.text,
-    idea.quote,
-    idea.paragraphId,
-    getIdeaDocumentName(idea),
-    idea.tag,
-  ].some((field) => field.toLowerCase().includes(query))
-}
-
-function matchesSnapshotSearch(snapshot: StoredComposerSnapshot, rawQuery: string): boolean {
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) {
-    return true
-  }
-
-  return [
-    snapshot.name,
-    snapshot.draftMode,
-    getSnapshotDocumentName(snapshot),
-    snapshot.note ?? '',
-    ...(snapshot.ideaTags ?? []),
-  ].some((field) => field.toLowerCase().includes(query))
-}
-
-function matchesSnapshotVisibility(
-  snapshot: StoredComposerSnapshot,
-  filterLabel: SnapshotVisibilityFilter,
-): boolean {
-  if (filterLabel === 'All snapshots') {
-    return true
-  }
-
-  if (filterLabel === 'Active only') {
-    return !snapshot.archivedAt
-  }
-
-  return Boolean(snapshot.archivedAt)
-}
-
-function matchesIdeaTimeFilter(idea: StoredIdea, filterLabel: IdeaTimeFilter): boolean {
-  if (filterLabel === 'All time') {
-    return true
-  }
-
-  const activityAt = new Date(idea.updatedAt ?? idea.createdAt).getTime()
-  if (Number.isNaN(activityAt)) {
-    return false
-  }
-
-  const elapsed = Date.now() - activityAt
-  if (filterLabel === 'Last 24h') {
-    return elapsed <= 24 * 60 * 60 * 1000
-  }
-
-  return elapsed <= 7 * 24 * 60 * 60 * 1000
-}
-
-function buildComposerSelectionKey(selectedIds: string[], mode: DraftMode): string {
-  const normalizedIds = [...selectedIds].sort((left, right) => left.localeCompare(right))
-  return `${mode}::${normalizedIds.join(',')}`
-}
-
-function deriveSnapshotDocumentName(ideas: StoredIdea[]): string {
-  const documents = Array.from(new Set(ideas.map((idea) => getIdeaDocumentName(idea))))
-  if (!documents.length) {
-    return 'Unknown paper'
-  }
-
-  if (documents.length === 1) {
-    return documents[0]
-  }
-
-  return `Mixed papers (${documents.length})`
-}
-
-function deriveSnapshotIdeaTags(ideas: StoredIdea[]): IdeaTag[] {
-  const tags = Array.from(new Set(ideas.map((idea) => idea.tag)))
-  return ideaTags.filter((tag) => tags.includes(tag))
 }

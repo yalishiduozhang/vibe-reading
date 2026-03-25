@@ -1,13 +1,13 @@
-import { buildContextCard } from '../reader/context'
+import { buildContextCard } from '../reader/context.ts'
 import type {
   ContextCardData,
   ContextCardField,
   EvidenceAttribution,
   ReaderParagraph,
   ReadingIntent,
-} from '../reader/types'
-import { requestAiText } from './client'
-import { getAiProviderLabel, type StoredAiConfig } from './storage'
+} from '../reader/types.ts'
+import { requestAiText } from './client.ts'
+import { getAiProviderLabel, type StoredAiConfig } from './storage.ts'
 
 type AiContextPayload = {
   summary?: Partial<ContextCardField>
