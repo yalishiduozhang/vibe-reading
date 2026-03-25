@@ -6,6 +6,8 @@
 
 <br/>
 
+[简体中文](./README.zh-CN.md)
+
 OpenVibeRead is an open-source research reading workbench focused on three linked workflows:
 
 - Read papers with contextual, inline AI assistance.
