@@ -740,14 +740,35 @@
   gap: 12px;
 }
 
-.composer-markdown-preview {
-  margin: 0;
-  white-space: pre-wrap;
-  word-break: break-word;
+.composer-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.composer-toolbar-note {
+  color: rgba(243, 239, 230, 0.68);
+  font-size: 0.82rem;
+}
+
+.composer-editor {
+  min-height: 320px;
+  resize: vertical;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 11, 18, 0.74);
   font-family: 'IBM Plex Mono', 'SFMono-Regular', 'Cascadia Code', monospace;
   font-size: 0.82rem;
   line-height: 1.55;
   color: rgba(243, 239, 230, 0.82);
+}
+
+.composer-editor:focus {
+  outline: 2px solid rgba(217, 181, 109, 0.32);
+  outline-offset: 2px;
 }
 
 @media (max-width: 1320px) {

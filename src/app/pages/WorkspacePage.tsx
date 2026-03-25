@@ -22,7 +22,12 @@ import {
   type CodeLinkDecisionKind,
   type StoredCodeLinkDecision,
 } from '../../features/code-link/mappings'
-import { buildIdeaDocumentDraft, draftModes, type DraftMode } from '../../features/idea-workspace/composer'
+import {
+  buildIdeaDraftFileName,
+  buildIdeaDocumentDraft,
+  draftModes,
+  type DraftMode,
+} from '../../features/idea-workspace/composer'
 import { analyzeRepoSource } from '../../features/code-link/source'
 import { buildContextCard, formatEvidenceRef } from '../../features/reader/context'
 import { loadPdfDocument, renderPdfPage } from '../../features/reader/pdf'
@@ -75,6 +80,8 @@ export default function WorkspacePage() {
   const [draftTag, setDraftTag] = useState<IdeaTag>('Improvement')
   const [draftMode, setDraftMode] = useState<DraftMode>('Project proposal')
   const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>([])
+  const [composerMarkdown, setComposerMarkdown] = useState('')
+  const [composerStatus, setComposerStatus] = useState<string | null>(null)
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -252,10 +259,17 @@ export default function WorkspacePage() {
     : 0
   const selectedIdeas = ideas.filter((idea) => selectedIdeaIds.includes(idea.id))
   const ideaDraft = buildIdeaDocumentDraft(selectedIdeas, draftMode)
+  const composerFileName = buildIdeaDraftFileName(ideaDraft.title)
   const pageStatus = documentProxy ? `Page ${currentPage} / ${documentProxy.numPages}` : 'No PDF loaded'
   const isRenderingPage =
     Boolean(documentProxy) &&
     (pageSnapshot?.pageNumber !== currentPage || renderedIntent !== intent)
+  const isComposerDirty = selectedIdeas.length > 0 && composerMarkdown !== ideaDraft.markdown
+
+  useEffect(() => {
+    setComposerMarkdown(ideaDraft.markdown)
+    setComposerStatus(null)
+  }, [ideaDraft.markdown])
 
   useEffect(() => {
     if (repoAnalysis.kind !== 'github') {
@@ -479,6 +493,47 @@ export default function WorkspacePage() {
 
   function handleClearIdeaSelection() {
     setSelectedIdeaIds([])
+  }
+
+  async function handleCopyComposerDraft() {
+    if (!composerMarkdown.trim()) {
+      return
+    }
+
+    if (!navigator.clipboard?.writeText) {
+      setComposerStatus('Clipboard is unavailable in this browser.')
+      return
+    }
+
+    try {
+      await navigator.clipboard.writeText(composerMarkdown)
+      setComposerStatus('Markdown copied to clipboard.')
+    } catch {
+      setComposerStatus('Failed to copy Markdown to clipboard.')
+    }
+  }
+
+  function handleDownloadComposerDraft() {
+    if (!composerMarkdown.trim()) {
+      return
+    }
+
+    const blob = new Blob([composerMarkdown], {
+      type: 'text/markdown;charset=utf-8',
+    })
+    const objectUrl = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+
+    anchor.href = objectUrl
+    anchor.download = composerFileName
+    anchor.click()
+    window.URL.revokeObjectURL(objectUrl)
+    setComposerStatus(`Downloaded ${composerFileName}.`)
+  }
+
+  function handleResetComposerDraft() {
+    setComposerMarkdown(ideaDraft.markdown)
+    setComposerStatus('Draft reset to the generated baseline.')
   }
 
   function hydrateCachedSnapshot(
@@ -1083,7 +1138,7 @@ export default function WorkspacePage() {
           </div>
 
           <div className="panel-subhead panel-subhead-column">
-            <h3>Composer Preview</h3>
+            <h3>Composer Draft</h3>
             <span>{selectedIdeas.length ? `${selectedIdeas.length} ideas selected` : 'Select ideas to assemble a draft'}</span>
           </div>
           <div className="idea-composer-shell">
@@ -1111,14 +1166,56 @@ export default function WorkspacePage() {
               <article className="context-card-block composer-card">
                 <div className="context-block-head">
                   <h3>{ideaDraft.title}</h3>
-                  <span>{draftMode}</span>
+                  <span>{composerFileName}</span>
                 </div>
-                <pre className="composer-markdown-preview">{ideaDraft.markdown}</pre>
+                <p className="repo-analysis-note">
+                  Edit the generated Markdown before exporting it. The current
+                  draft stays tied to the selected idea anchors.
+                </p>
+                <div className="composer-toolbar">
+                  <span className="composer-toolbar-note">
+                    {isComposerDirty ? 'Edited locally' : 'Matches generated baseline'}
+                  </span>
+                  <div className="candidate-actions">
+                    <button
+                      className="ghost-button ghost-button-small"
+                      disabled={!isComposerDirty}
+                      onClick={handleResetComposerDraft}
+                      type="button"
+                    >
+                      Reset Draft
+                    </button>
+                    <button
+                      className="ghost-button ghost-button-small"
+                      disabled={!composerMarkdown.trim()}
+                      onClick={() => void handleCopyComposerDraft()}
+                      type="button"
+                    >
+                      Copy Markdown
+                    </button>
+                    <button
+                      className="ghost-button ghost-button-small"
+                      disabled={!composerMarkdown.trim()}
+                      onClick={handleDownloadComposerDraft}
+                      type="button"
+                    >
+                      Download .md
+                    </button>
+                  </div>
+                </div>
+                {composerStatus ? <p className="repo-analysis-note">{composerStatus}</p> : null}
+                <textarea
+                  className="composer-editor"
+                  rows={18}
+                  spellCheck={false}
+                  value={composerMarkdown}
+                  onChange={(event) => setComposerMarkdown(event.target.value)}
+                />
               </article>
             ) : (
               <div className="empty-inline-state">
                 Select one or more ideas and the composer will assemble a
-                structured draft preview here.
+                structured draft editor here.
               </div>
             )}
           </div>

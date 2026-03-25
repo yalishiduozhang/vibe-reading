@@ -25,32 +25,18 @@ export function buildIdeaDocumentDraft(ideas: StoredIdea[], mode: DraftMode): Id
     left.createdAt < right.createdAt ? -1 : left.createdAt > right.createdAt ? 1 : 0,
   )
   const focusTags = Array.from(new Set(sortedIdeas.map((idea) => idea.tag))).join(', ')
-  const opening = buildOpening(mode, sortedIdeas.length, focusTags)
-  const observations = sortedIdeas
-    .map((idea, index) =>
-      `${index + 1}. [${idea.tag}] ${idea.text} (anchor: p.${idea.pageNumber} / ${idea.paragraphId})`,
+  const selectedIdeas = sortedIdeas
+    .map(
+      (idea, index) =>
+        `${index + 1}. [${idea.tag}] ${idea.text} (anchor: p.${idea.pageNumber} / ${idea.paragraphId})`,
     )
     .join('\n')
-  const evidence = sortedIdeas
+  const evidenceAnchors = sortedIdeas
     .map((idea) => `- p.${idea.pageNumber} / ${idea.paragraphId}: ${idea.quote}`)
     .join('\n')
-  const nextSteps = buildNextSteps(mode, sortedIdeas)
   const title = `${mode}: ${sortedIdeas[0].tag} driven draft`
-  const markdown = [
-    `# ${title}`,
-    '',
-    '## Framing',
-    opening,
-    '',
-    '## Selected Ideas',
-    observations,
-    '',
-    '## Evidence Anchors',
-    evidence,
-    '',
-    '## Next Steps',
-    nextSteps,
-  ].join('\n')
+  const sections = buildSections(mode, sortedIdeas.length, focusTags, selectedIdeas, evidenceAnchors, sortedIdeas)
+  const markdown = [`# ${title}`, '', ...sections].join('\n')
 
   return {
     title,
@@ -58,16 +44,75 @@ export function buildIdeaDocumentDraft(ideas: StoredIdea[], mode: DraftMode): Id
   }
 }
 
-function buildOpening(mode: DraftMode, count: number, focusTags: string): string {
+export function buildIdeaDraftFileName(title: string): string {
+  const stem = title
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+  return `${stem || 'idea-draft'}.md`
+}
+
+function buildSections(
+  mode: DraftMode,
+  count: number,
+  focusTags: string,
+  selectedIdeas: string,
+  evidenceAnchors: string,
+  ideas: StoredIdea[],
+): string[] {
   if (mode === 'Project proposal') {
-    return `This draft grows from ${count} reading-time ideas. The strongest signals currently cluster around: ${focusTags}. The goal is to convert those signals into a project direction with clear motivation and scope.`
+    return [
+      '## Problem Framing',
+      `This proposal grows from ${count} reading-time ideas. The strongest signals currently cluster around: ${focusTags}. The goal is to turn those signals into a project direction with clear motivation and scope.`,
+      '',
+      '## Candidate Direction',
+      'State the one-sentence project thesis here. Use the selected ideas below as the argument spine for the proposal.',
+      '',
+      '## Selected Ideas',
+      selectedIdeas,
+      '',
+      '## Evidence Anchors',
+      evidenceAnchors,
+      '',
+      '## Next Steps',
+      buildNextSteps(mode, ideas),
+    ]
   }
 
   if (mode === 'Experiment plan') {
-    return `This plan consolidates ${count} reading-time ideas into a testable experiment path. The current idea mix emphasizes: ${focusTags}. The goal is to move from observation to executable validation.`
+    return [
+      '## Experiment Goal',
+      `This plan consolidates ${count} reading-time ideas into a testable experiment path. The current idea mix emphasizes: ${focusTags}. The goal is to move from observation to executable validation.`,
+      '',
+      '## Working Hypotheses',
+      'Turn each selected idea into a falsifiable claim, ablation, or measurement target before implementation starts.',
+      '',
+      '## Selected Ideas',
+      selectedIdeas,
+      '',
+      '## Evidence Anchors',
+      evidenceAnchors,
+      '',
+      '## Experiment Checklist',
+      buildNextSteps(mode, ideas),
+    ]
   }
 
-  return `This memo condenses ${count} reading-time ideas into a structured reading note. The recurring tags are: ${focusTags}. The goal is to preserve interpretation, critique, and follow-up questions in one place.`
+  return [
+    '## Reading Summary',
+    `This memo condenses ${count} reading-time ideas into a structured reading note. The recurring tags are: ${focusTags}. The goal is to preserve interpretation, critique, and follow-up questions in one place.`,
+    '',
+    '## Key Observations',
+    selectedIdeas,
+    '',
+    '## Evidence Anchors',
+    evidenceAnchors,
+    '',
+    '## Follow-up',
+    buildNextSteps(mode, ideas),
+  ]
 }
 
 function buildNextSteps(mode: DraftMode, ideas: StoredIdea[]): string {

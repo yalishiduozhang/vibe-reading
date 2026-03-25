@@ -1,8 +1,8 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-24 22:33 (Asia/Shanghai)  
-当前阶段：Phase 4 in progress + Phase 5 groundwork started  
+最后更新：2026-03-25 16:28 (Asia/Shanghai)  
+当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
 ## 1. 文档目的
@@ -594,9 +594,9 @@ AI 任务拆分为：
 | M0 | 计划与文档冻结 | Completed | `plan.md` 获批，文档与仓库基线完成 |
 | M1 | 信息架构与原型蓝图 | Completed | 核心页面、流程、线框与前端骨架确定 |
 | M2 | Reader Core 可用 | Completed | 稳定 PDF 阅读、段落锚点、多页状态记忆与回跳能力已经可演示 |
-| M3 | 内联辅助与证据链可用 | Pending | 卡片和回跳可演示 |
-| M4 | 论文-代码联动可用 | Pending | 至少 1 个真实案例跑通 |
-| M5 | Idea 工作台可用 | Pending | idea -> 文档闭环跑通 |
+| M3 | 内联辅助与证据链可用 | In Progress | 卡片和回跳可演示 |
+| M4 | 论文-代码联动可用 | In Progress | 至少 1 个真实案例跑通 |
+| M5 | Idea 工作台可用 | In Progress | idea -> 文档闭环跑通 |
 | M6 | 展示版与测试版完成 | Pending | 支持课程展示与测试 |
 
 ## 12. 风险与应对
@@ -896,6 +896,39 @@ AI 任务拆分为：
 - 继续深化 GitHub 远程索引与真实候选质量
 - 评估是否用第二组样本做回归验证
 
+
+### 2026-03-25 16:28 / Phase sync + Phase 5 continuation
+
+#### 已完成
+
+- 重新对照 `docs/plan.md`、里程碑表和当前仓库实现，校准阶段判断
+- 将 `M3`、`M4`、`M5` 的状态从 `Pending` 更新为 `In Progress`
+- 同步修正文档中的当前阶段描述、开放问题和下一批执行项
+- 将 Composer 从“只读预览”推进为“可编辑 Markdown 草稿”
+- 为 Composer 加入 `Reset Draft`、`Copy Markdown`、`Download .md`
+- 按 `Project proposal`、`Experiment plan`、`Reading memo` 重组草稿 section 结构
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- Phase 5 已不再只是 groundwork，而是进入可继续收敛验收差距的 in-progress 状态
+- 当前系统已经具备更完整的闭环演示：读段落 -> 记 idea -> 选 idea -> 编辑草稿 -> 导出 Markdown
+- `M5` 仍未完成，因为 idea 管理能力、AI 扩展和导出层整合还未到位
+- 当前主阻塞已收敛到两条：一条是 Code Link 的真实跳转深度，一条是 Idea Workspace 的管理与持久化能力
+
+#### 遇到的问题
+
+- `M3` 已有意图、evidence 和回跳结构，但仍未接入真正的模型输出与翻译能力
+- `M4` 虽已具备真实 GitHub 索引和 confirmation memory，但仍缺代码侧回链与更明确的文件/符号跳转
+- `M5` 已有编辑与导出起点，但编辑结果当前仍是局部工作台态，尚未形成完整的 draft 持久化与管理链路
+
+#### 下一步
+
+- 继续补强 Composer：idea 筛选、编辑/删除、draft 持久化边界
+- 继续深化 GitHub 远程索引：artifact 排序、文件跳转和第二样本回归
+- 把 Code Link 从“候选展示”继续推进到“更明确的代码目标跳转 + 代码侧回链”
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1039,16 +1072,25 @@ AI 任务拆分为：
 - 这样可以先验证“选择 idea -> 形成结构化草稿”这条链路是否成立。
 - 在没有模型配置和导出层之前，内联式 Composer 更适合快速验证交互价值。
 
+### D-016（2026-03-25）
+
+决定：Phase 5 下一步继续采用“生成草稿 -> 本地编辑 -> Markdown 导出”的渐进式路径，暂不拆独立文档页面。
+
+原因：
+
+- 这样能先把 `M5` 的主要验收缺口从“只有预览”缩小到“可编辑、可导出”的原型状态。
+- 在 AI 扩展、导出层和 draft 持久化规则都未冻结前，继续留在 Workspace 内更利于快速迭代。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
 
 1. Reader Core 的段落切分第一版只用规则，还是直接引入 Docling？
-2. 代码联动第一版是否支持仓库全文本索引，还是只做结构索引？
+2. `M4` 的第一轮通过标准是否接受“文件级深链”，还是必须补到更明确的函数 / 符号级跳转？
 3. 第一版图表解释是否进 Phase 6，还是提前做一个轻量版？
 4. 桌面壳何时介入，是否在 Web 原型稳定后再评估？
-5. GitHub 远程索引第一轮是只抓 repo tree + README，还是同步抽取少量关键源码文件？
-6. Web-first 原型里，本地仓库读取是先通过后端桥接，还是先以 GitHub URL 演示为主？
+5. Web-first 原型里，本地仓库读取是先通过后端桥接，还是先以 GitHub URL 演示为主？
+6. Composer 的编辑结果是先保持会话级，还是进入本地持久化草稿管理？
 
 ## 17. 审批后的固定规则
 
@@ -1065,9 +1107,10 @@ AI 任务拆分为：
 
 1. 深化 Composer：补上草稿编辑、模式切换后的 section 结构优化，以及后续 Markdown 导出接口。
 2. 继续深化 GitHub 远程索引：补强 artifact 排序、文件跳转与缓存策略。
-3. 评估是否把 repo index / confirmation memory / composer selection 抽成独立 store，继续推进 WP-H。
-4. 评估是否需要把主样本之外的 LoRA / CLIP 作为回归样本加入验证。
-5. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
+3. 继续补强 Idea Workspace：加入筛选、编辑/删除与 draft 持久化边界设计。
+4. 评估是否把 repo index / confirmation memory / composer selection 抽成独立 store，继续推进 WP-H。
+5. 评估是否需要把主样本之外的 LoRA / CLIP 作为回归样本加入验证。
+6. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
 
 ## 19. 当前迭代执行拆解（Iteration B）
 

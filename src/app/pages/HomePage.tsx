@@ -33,6 +33,7 @@ const completedSteps = [
   'Information architecture and wireframes committed',
   'Reader Core anchors, evidence schema, and jump-back are working',
   'Primary demo sample is now frozen for paper-to-code linking',
+  'Idea composer now supports draft editing and Markdown export',
 ]
 
 export default function HomePage() {
@@ -57,11 +58,11 @@ export default function HomePage() {
         </div>
         <div className="hero-panel" id="phase-status">
           <span className="panel-label">Current Stage</span>
-          <strong>Phase 2 to Phase 4 bridge</strong>
+          <strong>Phase 4 and Phase 5 in progress</strong>
           <p>
-            The reader core is stable enough to support the next layer: demo
-            paper selection, repo-source normalization, and confirmed paper-to-
-            code mapping memory inside the same workspace.
+            The workspace has moved past reader-only work. The active push now
+            combines real repo indexing, confirmation memory, and editable
+            idea-to-draft output inside the same flow.
           </p>
         </div>
       </header>
@@ -109,12 +110,12 @@ export default function HomePage() {
         <section className="card card-wide accent-card">
           <div className="section-head">
             <p className="section-kicker">Implementation Focus</p>
-            <h2>PDF first, then paragraph-aware interaction.</h2>
+            <h2>Deepen code links and turn ideas into exportable drafts.</h2>
           </div>
           <p className="accent-copy">
-            The active milestone is no longer just loading PDFs. The workspace is
-            now being tightened around a real demo pair, repo-source analysis,
-            confirmation memory, and the path toward true paper-to-code linking.
+            The active milestone is no longer just loading PDFs. The current
+            work is tightening real repo artifacts, paper-to-code confirmation
+            memory, and the editable Markdown draft path for captured ideas.
           </p>
         </section>
       </main>

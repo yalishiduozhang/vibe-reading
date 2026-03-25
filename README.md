@@ -14,8 +14,8 @@ Current focus:
 
 - Stable PDF reading with paragraph anchors and jump-back behavior
 - Evidence-backed context cards in the reading workspace
-- Demo-sample selection for paper-to-code linking
-- Repo-source normalization and confirmation-memory scaffolding
+- Real GitHub repo indexing and confirmation-memory scaffolding for paper-to-code linking
+- Editable idea-draft composition with Markdown export
 
 Primary planning and research documents live in [`docs/`](./docs):
 
