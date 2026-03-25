@@ -73,15 +73,21 @@ import {
   type DraftMode,
 } from '../../features/idea-workspace/composer'
 import {
-  buildDuplicateSnapshotName,
   buildSnapshotLineage,
   buildSnapshotComparisonSummary,
   buildSnapshotRelationSignals,
 } from '../../features/idea-workspace/snapshots'
 import {
+  deleteComposerSnapshot,
+  duplicateComposerSnapshot,
+  planComposerSnapshotLoad,
+  renameComposerSnapshot,
+  resolveComposerDraftRestore,
+  saveComposerSnapshot,
+  toggleComposerSnapshotArchive,
+} from '../../features/idea-workspace/session'
+import {
   buildComposerSelectionKey,
-  deriveSnapshotDocumentName,
-  deriveSnapshotIdeaTags,
   getErrorMessage,
   getIdeaDocumentName,
   getSnapshotDocumentName,
@@ -511,37 +517,25 @@ export default function WorkspacePage() {
   }, [aiContextCacheKey])
 
   useEffect(() => {
-    if (!selectedIdeas.length) {
-      pendingSnapshotLoadRef.current = null
-      restoredComposerSelectionKeyRef.current = composerSelectionKey
-      setComposerMarkdown('')
-      setComposerStatus(null)
+    const nextRestore = resolveComposerDraftRestore({
+      selectionKey: composerSelectionKey,
+      previousSelectionKey: restoredComposerSelectionKeyRef.current,
+      selectedIdeaCount: selectedIdeas.length,
+      ideaDraftMarkdown: ideaDraft.markdown,
+      pendingSnapshot: pendingSnapshotLoadRef.current,
+      storedDraft: loadStoredComposerDraft(),
+    })
+
+    if (nextRestore.kind === 'noop') {
       return
     }
 
-    if (restoredComposerSelectionKeyRef.current === composerSelectionKey) {
-      return
-    }
-
-    const pendingSnapshot = pendingSnapshotLoadRef.current
-    if (pendingSnapshot && pendingSnapshot.selectionKey === composerSelectionKey) {
-      setComposerMarkdown(pendingSnapshot.markdown)
-      setComposerStatus(`Loaded snapshot "${pendingSnapshot.name}".`)
-      restoredComposerSelectionKeyRef.current = composerSelectionKey
-      pendingSnapshotLoadRef.current = null
-      return
-    }
-
-    const storedComposerDraft = loadStoredComposerDraft()
-    if (storedComposerDraft && storedComposerDraft.selectionKey === composerSelectionKey) {
-      setComposerMarkdown(storedComposerDraft.markdown)
-      setComposerStatus('Restored saved draft.')
-    } else {
-      setComposerMarkdown(ideaDraft.markdown)
-      setComposerStatus(null)
-    }
-
-    restoredComposerSelectionKeyRef.current = composerSelectionKey
+    pendingSnapshotLoadRef.current = nextRestore.pendingSnapshot
+    restoredComposerSelectionKeyRef.current = nextRestore.restoredSelectionKey
+    setComposerMarkdown(nextRestore.markdown)
+    setComposerSnapshotName(nextRestore.snapshotName)
+    setComposerSnapshotNote(nextRestore.snapshotNote)
+    setComposerStatus(nextRestore.status)
   }, [composerSelectionKey, ideaDraft.markdown, selectedIdeas.length])
 
   useEffect(() => {
@@ -1058,114 +1052,87 @@ export default function WorkspacePage() {
       return
     }
 
-    const snapshotName = composerSnapshotName.trim() || ideaDraft.title
-    const snapshotNote = composerSnapshotNote.trim()
-    const updatedAt = new Date().toISOString()
-    const documentName = deriveSnapshotDocumentName(selectedIdeas)
-    const ideaTags = deriveSnapshotIdeaTags(selectedIdeas)
-
-    setComposerSnapshots((currentSnapshots) => {
-      const existingSnapshot = currentSnapshots.find(
-        (snapshot) => snapshot.name === snapshotName && snapshot.selectionKey === composerSelectionKey,
-      )
-
-      if (existingSnapshot) {
-        return [
-          {
-            ...existingSnapshot,
-            draftMode,
-            selectedIdeaIds: [...selectedIdeaIds],
-            markdown: composerMarkdown,
-            updatedAt,
-            documentName,
-            ideaTags,
-            note: snapshotNote || undefined,
-          },
-          ...currentSnapshots.filter((snapshot) => snapshot.id !== existingSnapshot.id),
-        ]
-      }
-
-      return [
-        {
-          id: crypto.randomUUID(),
-          name: snapshotName,
-          selectionKey: composerSelectionKey,
-          selectedIdeaIds: [...selectedIdeaIds],
-          draftMode,
-          markdown: composerMarkdown,
-          updatedAt,
-          documentName,
-          ideaTags,
-          note: snapshotNote || undefined,
-        },
-        ...currentSnapshots,
-      ]
+    const nextSave = saveComposerSnapshot({
+      snapshots: composerSnapshots,
+      selectionKey: composerSelectionKey,
+      selectedIdeaIds,
+      selectedIdeas,
+      draftMode,
+      markdown: composerMarkdown,
+      snapshotNameInput: composerSnapshotName,
+      snapshotNoteInput: composerSnapshotNote,
+      fallbackTitle: ideaDraft.title,
+      now: new Date().toISOString(),
     })
-    setComposerStatus(`Saved snapshot "${snapshotName}".`)
+
+    setComposerSnapshots(nextSave.snapshots)
+    setComposerSnapshotName(nextSave.savedSnapshot.name)
+    setComposerSnapshotNote(nextSave.savedSnapshot.note ?? '')
+    setComposerStatus(nextSave.status)
   }
 
   function handleLoadComposerSnapshot(snapshot: StoredComposerSnapshot) {
-    setComposerSnapshotName(snapshot.name)
-    setComposerSnapshotNote(snapshot.note ?? '')
+    const nextLoadPlan = planComposerSnapshotLoad(snapshot, composerSelectionKey)
 
-    if (snapshot.selectionKey === composerSelectionKey) {
-      setComposerMarkdown(snapshot.markdown)
-      setComposerStatus(`Loaded snapshot "${snapshot.name}".`)
-      return
+    pendingSnapshotLoadRef.current = nextLoadPlan.pendingSnapshot
+    setComposerSnapshotName(nextLoadPlan.snapshotName)
+    setComposerSnapshotNote(nextLoadPlan.snapshotNote)
+    setComposerStatus(nextLoadPlan.status)
+
+    if (nextLoadPlan.markdown !== null) {
+      setComposerMarkdown(nextLoadPlan.markdown)
     }
-
-    pendingSnapshotLoadRef.current = snapshot
-    setSelectedIdeaIds(snapshot.selectedIdeaIds)
-    setDraftMode(snapshot.draftMode)
-    setComposerStatus(`Loading snapshot "${snapshot.name}"...`)
+    if (nextLoadPlan.nextSelectedIdeaIds) {
+      setSelectedIdeaIds(nextLoadPlan.nextSelectedIdeaIds)
+    }
+    if (nextLoadPlan.nextDraftMode) {
+      setDraftMode(nextLoadPlan.nextDraftMode)
+    }
   }
 
   function handleDuplicateComposerSnapshot(snapshot: StoredComposerSnapshot) {
-    const updatedAt = new Date().toISOString()
-    let duplicatedSnapshotName = ''
-    let duplicatedSnapshotId = ''
-
-    setComposerSnapshots((currentSnapshots) => {
-      duplicatedSnapshotName = buildDuplicateSnapshotName(snapshot, currentSnapshots)
-      duplicatedSnapshotId = crypto.randomUUID()
-
-      return [
-        {
-          ...snapshot,
-          id: duplicatedSnapshotId,
-          name: duplicatedSnapshotName,
-          updatedAt,
-          archivedAt: undefined,
-          parentSnapshotId: snapshot.id,
-          parentSnapshotName: snapshot.name,
-        },
-        ...currentSnapshots,
-      ]
+    const nextDuplicate = duplicateComposerSnapshot({
+      snapshots: composerSnapshots,
+      snapshot,
+      now: new Date().toISOString(),
     })
 
-    if (duplicatedSnapshotId) {
-      setExpandedSnapshotId(duplicatedSnapshotId)
-    }
-    if (duplicatedSnapshotName) {
-      setComposerSnapshotName(duplicatedSnapshotName)
-      setComposerStatus(`Duplicated snapshot as "${duplicatedSnapshotName}".`)
-    }
+    setComposerSnapshots(nextDuplicate.snapshots)
+    setExpandedSnapshotId(nextDuplicate.duplicatedSnapshot.id)
+    setComposerSnapshotName(nextDuplicate.duplicatedSnapshot.name)
+    setComposerSnapshotNote(nextDuplicate.duplicatedSnapshot.note ?? '')
+    setComposerStatus(nextDuplicate.status)
   }
 
-  function handleDeleteComposerSnapshot(snapshotId: string) {
-    if (editingSnapshotId === snapshotId) {
+  function handleDeleteComposerSnapshot(snapshot: StoredComposerSnapshot) {
+    const nextDelete = deleteComposerSnapshot({
+      snapshotId: snapshot.id,
+      snapshots: composerSnapshots,
+    })
+
+    if (editingSnapshotId === snapshot.id) {
       setEditingSnapshotId('')
       setEditingSnapshotName('')
       setEditingSnapshotNote('')
     }
-    if (expandedSnapshotId === snapshotId) {
+    if (expandedSnapshotId === snapshot.id) {
       setExpandedSnapshotId('')
     }
+    if (pendingSnapshotLoadRef.current) {
+      pendingSnapshotLoadRef.current =
+        nextDelete.snapshots.find((candidate) => candidate.id === pendingSnapshotLoadRef.current?.id) ?? null
+    }
+    if (
+      snapshot.selectionKey === composerSelectionKey &&
+      composerSnapshotName.trim() === snapshot.name &&
+      composerSnapshotNote.trim() === (snapshot.note ?? '')
+    ) {
+      setComposerSnapshotName('')
+      setComposerSnapshotNote('')
+    }
 
-    setComposerSnapshots((currentSnapshots) =>
-      currentSnapshots.filter((snapshot) => snapshot.id !== snapshotId),
-    )
-    setComposerStatus('Snapshot deleted.')
+    setComposerSnapshots(nextDelete.snapshots)
+    setComposerStatus(nextDelete.status)
   }
 
   function handleStartComposerSnapshotRename(snapshot: StoredComposerSnapshot) {
@@ -1181,70 +1148,57 @@ export default function WorkspacePage() {
   }
 
   function handleSaveComposerSnapshotRename(snapshot: StoredComposerSnapshot) {
-    const nextName = editingSnapshotName.trim()
-    if (!nextName) {
-      setComposerStatus('Snapshot name cannot be empty.')
-      return
-    }
-
-    const hasConflict = composerSnapshots.some(
-      (currentSnapshot) =>
-        currentSnapshot.id !== snapshot.id &&
-        currentSnapshot.selectionKey === snapshot.selectionKey &&
-        currentSnapshot.name === nextName,
-    )
-
-    if (hasConflict) {
-      setComposerStatus(`A snapshot named "${nextName}" already exists for this draft selection.`)
-      return
-    }
-
-    const updatedAt = new Date().toISOString()
-    setComposerSnapshots((currentSnapshots) => {
-      const targetSnapshot = currentSnapshots.find((currentSnapshot) => currentSnapshot.id === snapshot.id)
-      if (!targetSnapshot) {
-        return currentSnapshots
-      }
-
-      return [
-        {
-          ...targetSnapshot,
-          name: nextName,
-          note: editingSnapshotNote.trim() || undefined,
-          updatedAt,
-        },
-        ...currentSnapshots.filter((currentSnapshot) => currentSnapshot.id !== snapshot.id),
-      ]
+    const nextRename = renameComposerSnapshot({
+      snapshots: composerSnapshots,
+      snapshot,
+      nextNameInput: editingSnapshotName,
+      nextNoteInput: editingSnapshotNote,
+      now: new Date().toISOString(),
     })
-    setComposerSnapshotName(nextName)
+
+    if (nextRename.kind === 'error') {
+      setComposerStatus(nextRename.status)
+      return
+    }
+
+    if (pendingSnapshotLoadRef.current) {
+      pendingSnapshotLoadRef.current =
+        nextRename.snapshots.find((candidate) => candidate.id === pendingSnapshotLoadRef.current?.id) ?? null
+    }
+    if (
+      snapshot.selectionKey === composerSelectionKey &&
+      composerSnapshotName.trim() === snapshot.name &&
+      composerSnapshotNote.trim() === (snapshot.note ?? '')
+    ) {
+      setComposerSnapshotName(nextRename.renamedSnapshot.name)
+      setComposerSnapshotNote(nextRename.renamedSnapshot.note ?? '')
+    }
+
+    setComposerSnapshots(nextRename.snapshots)
     setEditingSnapshotId('')
     setEditingSnapshotName('')
     setEditingSnapshotNote('')
-    setComposerStatus(`Renamed snapshot to "${nextName}".`)
+    setComposerStatus(nextRename.status)
   }
 
   function handleToggleComposerSnapshotArchive(snapshotId: string) {
-    const updatedAt = new Date().toISOString()
-    const targetSnapshot = composerSnapshots.find((snapshot) => snapshot.id === snapshotId)
-    const nextIsArchived = !targetSnapshot?.archivedAt
+    const nextToggle = toggleComposerSnapshotArchive({
+      snapshots: composerSnapshots,
+      snapshotId,
+      now: new Date().toISOString(),
+    })
 
-    setComposerSnapshots((currentSnapshots) =>
-      currentSnapshots.map((snapshot) =>
-        snapshot.id === snapshotId
-          ? {
-              ...snapshot,
-              archivedAt: snapshot.archivedAt ? undefined : updatedAt,
-              updatedAt,
-            }
-          : snapshot,
-      ),
-    )
-
-    if (!targetSnapshot) {
+    if (!nextToggle.snapshot) {
       return
     }
 
-    setComposerStatus(nextIsArchived ? 'Snapshot archived.' : 'Snapshot restored.')
+    if (pendingSnapshotLoadRef.current) {
+      pendingSnapshotLoadRef.current =
+        nextToggle.snapshots.find((candidate) => candidate.id === pendingSnapshotLoadRef.current?.id) ?? null
+    }
+
+    setComposerSnapshots(nextToggle.snapshots)
+    setComposerStatus(nextToggle.status)
   }
 
   function handleToggleComposerSnapshotPreview(snapshotId: string) {
@@ -2905,7 +2859,7 @@ export default function WorkspacePage() {
                           </button>
                           <button
                             className="ghost-button ghost-button-small"
-                            onClick={() => handleDeleteComposerSnapshot(snapshot.id)}
+                            onClick={() => handleDeleteComposerSnapshot(snapshot)}
                             type="button"
                           >
                             Delete

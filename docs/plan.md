@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 20:36 (Asia/Shanghai)
+最后更新：2026-03-25 20:49 (Asia/Shanghai)
 当前阶段：Phase 3 completed + Phase 4 in progress + Phase 5 in progress + WP-H in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1931,6 +1931,40 @@ AI 任务拆分为：
 - 继续推进 `M4`：把注意力切回本地路径 / repo bridge 与 code-link 深度
 - 继续推进自测：沿着已建好的入口，优先补 `indexing.ts` 及 repo/index diagnostics 相关纯逻辑测试
 
+### 2026-03-25 20:49 / WP-H composer snapshot action extraction + workflow hardening
+
+#### 已完成
+
+- 新增 `src/features/idea-workspace/session.ts`，把 composer/snapshot 这条线最密集的页面动作抽到 feature 层，覆盖 selection restore、snapshot save/load/duplicate/rename/archive/delete
+- `WorkspacePage` 不再内嵌这一大段 snapshot/composer 状态转移逻辑，相关 handler 统一走 feature action；页面文件从 `3090` 行降到 `3044` 行
+- 新增 `test/idea-workspace-session.test.ts`，补上 composer/snapshot action 的最小回归集，覆盖 pending snapshot 优先级、saved draft 恢复、snapshot overwrite、archive toggle、duplicate、rename、delete
+- 修复了几类真实状态问题：
+  - 切换 idea selection 后旧 snapshot name / note 残留在 composer 表单里，导致跨选择污染
+  - rename snapshot 时会误改全局 composer snapshot input，而不是只在真正绑定该快照时同步
+  - pending snapshot 在 rename / archive / delete 后可能保留脏引用，后续再次命中 selection 时会加载过期状态
+  - 已归档 snapshot 被显式保存覆盖时，现在会恢复为 active，而不是继续静默留在 archived 状态
+  - parent snapshot rename 后，derived snapshot 的 `parentSnapshotName` 现在会同步更新
+- 当前已再次验证通过：`npm run test`、`npm run build`、`npm run lint`、`git diff --check`
+
+#### 当前判断
+
+- `WP-H` 这一轮已经不再只是拆纯 helper，而是开始回收真正的页面状态动作；这说明“局部 action/helper 下沉”这条路线已经被证明可行
+- `M5` 的 snapshot library 现在不仅功能更完整，状态可信度也更高，后续是否升级成正式 draft entity 可以在更稳的基线上判断
+- 当前最值得继续下沉的局部状态，已经从 snapshot/composer 切到 AI assist 与 repo indexing 这两条异步链路
+
+#### 遇到的问题
+
+- 当前测试仍主要覆盖纯逻辑与状态动作，尚未进入 React 组件交互层
+- `WorkspacePage` 虽继续缩小，但 500 kB chunk warning 仍在，说明仅靠动作下沉还不足以彻底解决页面体积问题
+- repo indexing 的 loading / error / source 协调仍在页面层，`WP-H` 主压力还没有完全转移
+
+#### 下一步
+
+- 继续推进 `WP-H`：把 repo indexing / sample warm-up 的 loading / error / source 协调继续抽成 controller 或 custom hook
+- 继续推进 `WP-H`：沿同一思路清理 AI assist 的 provider 配置、request stale guard 与状态协调
+- 继续推进自测：优先补 `indexing.ts`、`regression.ts` 以及 repo diagnostics 的纯逻辑测试
+- 继续推进 `M4`：在结构和可靠性进一步收口后，把火力切回本地路径 / repo bridge 与 code-link 深度
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2380,6 +2414,16 @@ AI 任务拆分为：
 - 当前更需要先把最容易回归的纯逻辑纳入可执行检查，而不是为了测试先引入一整套更重的框架和配置负担。
 - 这条路径与当前 Web-first、快速迭代的节奏兼容，同时已经足够支撑后续继续补 `indexing.ts`、`snapshots.ts` 等模块自测。
 
+### D-050（2026-03-25）
+
+决定：`WP-H` 在 composer / snapshot 这条线继续采用“feature action/helper 下沉 + 页面层保留最小状态接线”的路线，而不是立刻引入更重的全页 store/reducer 改写。
+
+原因：
+
+- 当前真正膨胀的是若干局部状态动作，而不是整个页面都已经成熟到值得一次性重写为大 store。
+- 这条路线已经证明可以一边减小 `WorkspacePage` 密度，一边直接补回归测试和修真实状态 bug，收益比更高。
+- 在 repo indexing 与 AI assist 仍未完成边界收敛前，过早上全页状态重构会放大迁移成本和回归面。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
@@ -2391,7 +2435,7 @@ AI 任务拆分为：
 5. 当前 `snapshot` 已具备 detail / duplicate / lineage 后，是否已经足够，还是仍需要升级为真正的 draft 实体与列表页？
 6. repo indexing / sample warm-up 下一步是抽成 custom hook / controller，还是继续维持“feature function + page state”的半下沉结构？
 7. Phase 3 当前采用浏览器直连 provider，后续是继续保持 local-first 直连，还是补 server proxy / backend bridge？
-8. 最小自测入口已经建立后，下一批优先补 `indexing.ts`、`snapshots.ts`、`ai/context.ts`，还是先继续集中火力拆 `WorkspacePage`？
+8. composer / snapshot action 已下沉后，下一批应优先继续拆 repo indexing / AI assist 异步状态，还是先把主火力切回 `M4` 的本地路径 / repo bridge？
 
 ## 17. 审批后的固定规则
 
@@ -2406,11 +2450,11 @@ AI 任务拆分为：
 
 接下来应按以下顺序继续：
 
-1. 继续推进 `WP-H`：评估是否把 repo indexing 的 loading / error / source 状态抽成 custom hook 或 controller，进一步压缩页面层异步编排。
-2. 继续推进 `WP-H`：开始清理 AI assist / snapshot detail / selection 这条线的页面状态密度，判断是否抽独立 action/helper 或局部 store。
-3. 继续推进验证基础设施：沿着现有 `npm run test` 补 `indexing.ts`、`snapshots.ts`、`ai/context.ts` 的纯逻辑测试。
-4. 继续推进 `M4`：在 Phase 3 已完成且可靠性补强后，把主火力切回 repo bridge、本地路径方案和 code-link 深度。
-5. 继续推进 `M5`：根据 snapshot detail / duplicate / lineage 的真实使用路径，决定是否升级为正式 draft 实体与列表页。
+1. 继续推进 `WP-H`：优先把 repo indexing / sample warm-up 的 loading / error / source 状态抽成 controller 或 custom hook，进一步压缩页面层异步编排。
+2. 继续推进 `WP-H`：沿着 composer / snapshot action 的同一模式，清理 AI assist 的 provider 配置、live request 和 stale guard 协调。
+3. 继续推进验证基础设施：沿着现有 `npm run test` 补 `indexing.ts`、`regression.ts`、repo diagnostics 的纯逻辑测试。
+4. 继续推进 `M4`：在 Phase 3 已完成且结构进一步收口后，把主火力切回 repo bridge、本地路径方案和 code-link 深度。
+5. 继续推进 `M5`：在 snapshot workflow 更稳后，再判断是否真的升级为正式 draft 实体与列表页。
 6. 继续推进 Phase 3 后处理：评估 AI 结果是否需要持久化、prompt preset 是否需要拆分，以及是否引入 proxy/bridge。
 7. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
 
