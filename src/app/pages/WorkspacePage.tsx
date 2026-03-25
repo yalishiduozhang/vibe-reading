@@ -69,12 +69,14 @@ const allPapersFilterLabel = 'All papers'
 const allSnapshotPapersFilterLabel = 'All snapshot papers'
 const allTagsFilterLabel = 'All tags'
 const snapshotVisibilityFilters = ['All snapshots', 'Active only', 'Archived only'] as const
+const symbolCacheViewModes = ['Focused hits', 'All cached'] as const
 const timeFilters = ['All time', 'Last 24h', 'Last 7d'] as const
 
 type AssistTab = 'context' | 'code'
 type IdeaTagFilter = IdeaTag | typeof allTagsFilterLabel
 type IdeaTimeFilter = (typeof timeFilters)[number]
 type SnapshotVisibilityFilter = (typeof snapshotVisibilityFilters)[number]
+type SymbolCacheViewMode = (typeof symbolCacheViewModes)[number]
 type RepoIndexSource = 'none' | 'cache' | 'network'
 type SampleRegressionDiagnosticReason = 'network' | 'not-found' | 'rate-limit' | 'unsupported' | 'unknown'
 type SampleRegressionDiagnostic = {
@@ -142,6 +144,9 @@ export default function WorkspacePage() {
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
   const [repoIndexSource, setRepoIndexSource] = useState<RepoIndexSource>('none')
   const [repoIndexCacheVersion, setRepoIndexCacheVersion] = useState(0)
+  const [symbolCacheSearchQuery, setSymbolCacheSearchQuery] = useState('')
+  const [symbolCacheViewMode, setSymbolCacheViewMode] = useState<SymbolCacheViewMode>('Focused hits')
+  const [isSymbolCacheExpanded, setIsSymbolCacheExpanded] = useState(false)
   const [sampleRegressionIndexStatus, setSampleRegressionIndexStatus] = useState<string | null>(null)
   const [sampleRegressionDiagnostics, setSampleRegressionDiagnostics] = useState<
     Partial<Record<DemoSampleId, SampleRegressionDiagnostic>>
@@ -305,17 +310,26 @@ export default function WorkspacePage() {
     repoIndexCacheVersion,
   )
   const repoSymbolCacheEntries: RepoSymbolCacheEntry[] = repoIndex?.symbolCache ?? []
+  const filteredRepoSymbolCacheEntries = repoSymbolCacheEntries.filter((entry) =>
+    matchesRepoSymbolCacheEntry(entry, symbolCacheSearchQuery),
+  )
   const rankedRepoSymbolCacheEntries: RankedRepoSymbolCacheEntry[] = selectedParagraph
-    ? rankRepoSymbolCacheEntries(repoSymbolCacheEntries, selectedParagraph.text)
+    ? rankRepoSymbolCacheEntries(filteredRepoSymbolCacheEntries, selectedParagraph.text, {
+        maxEntries: filteredRepoSymbolCacheEntries.length || 6,
+      })
     : []
-  const visibleRepoSymbolCacheEntries: RankedRepoSymbolCacheEntry[] =
-    rankedRepoSymbolCacheEntries.length > 0
+  const symbolCacheDisplayEntries: RankedRepoSymbolCacheEntry[] =
+    selectedParagraph && symbolCacheViewMode === 'Focused hits' && rankedRepoSymbolCacheEntries.length > 0
       ? rankedRepoSymbolCacheEntries
-      : repoSymbolCacheEntries.slice(0, 6).map((entry) => ({
+      : filteredRepoSymbolCacheEntries.map((entry) => ({
           ...entry,
           score: 0,
           signals: [],
         }))
+  const visibleRepoSymbolCacheEntries: RankedRepoSymbolCacheEntry[] = isSymbolCacheExpanded
+    ? symbolCacheDisplayEntries
+    : symbolCacheDisplayEntries.slice(0, 6)
+  const hiddenRepoSymbolCacheCount = Math.max(symbolCacheDisplayEntries.length - visibleRepoSymbolCacheEntries.length, 0)
   const repoIndexStatusSignals = repoIndex ? buildRepoIndexStatusSignals(repoIndex, repoIndexSource) : []
   const codeCandidates = buildCodeCandidates(
     selectedParagraph,
@@ -416,6 +430,10 @@ export default function WorkspacePage() {
       setSnapshotDocumentFilter(allSnapshotPapersFilterLabel)
     }
   }, [snapshotDocumentFilter, snapshotDocuments])
+
+  useEffect(() => {
+    setIsSymbolCacheExpanded(false)
+  }, [symbolCacheSearchQuery, symbolCacheViewMode, repoIndex?.repoUrl, selectedParagraph?.id])
 
   useEffect(() => {
     if (!selectedIdeas.length) {
@@ -1486,19 +1504,58 @@ export default function WorkspacePage() {
                           <div className="context-block-head">
                             <h3>Indexed Symbol Cache</h3>
                             <span>
-                              {selectedParagraph && rankedRepoSymbolCacheEntries.length
-                                ? `${rankedRepoSymbolCacheEntries.length} focused / ${repoSymbolCacheEntries.length} cached`
-                                : `${repoSymbolCacheEntries.length} cached`}
+                              {`${visibleRepoSymbolCacheEntries.length} visible / ${symbolCacheDisplayEntries.length} matching / ${repoSymbolCacheEntries.length} cached`}
                             </span>
                           </div>
+                          {repoSymbolCacheEntries.length ? (
+                            <div className="idea-filter-grid">
+                              <label className="control-group">
+                                <span>Search Symbols</span>
+                                <input
+                                  placeholder="Filter by symbol, path, or snippet"
+                                  value={symbolCacheSearchQuery}
+                                  onChange={(event) => setSymbolCacheSearchQuery(event.target.value)}
+                                />
+                              </label>
+                              <label className="control-group">
+                                <span>View</span>
+                                <select
+                                  value={symbolCacheViewMode}
+                                  onChange={(event) =>
+                                    setSymbolCacheViewMode(event.target.value as SymbolCacheViewMode)
+                                  }
+                                >
+                                  {symbolCacheViewModes.map((mode) => (
+                                    <option key={mode} value={mode}>
+                                      {mode}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <div className="control-group">
+                                <span>Range</span>
+                                <button
+                                  className="ghost-button ghost-button-small"
+                                  disabled={hiddenRepoSymbolCacheCount === 0 && !isSymbolCacheExpanded}
+                                  onClick={() => setIsSymbolCacheExpanded((current) => !current)}
+                                  type="button"
+                                >
+                                  {isSymbolCacheExpanded ? 'Collapse' : hiddenRepoSymbolCacheCount ? `Show All (${hiddenRepoSymbolCacheCount} more)` : 'Top Visible'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : null}
                           {selectedParagraph ? (
                             <p className="repo-analysis-note">
-                              {rankedRepoSymbolCacheEntries.length
+                              {symbolCacheViewMode === 'Focused hits' && rankedRepoSymbolCacheEntries.length
                                 ? 'Showing the strongest paragraph-aware symbol hits from the current repo cache.'
-                                : 'No direct symbol-cache hit for the current paragraph yet. Showing the top cached symbols instead.'}
+                                : symbolCacheViewMode === 'Focused hits'
+                                  ? 'No direct symbol-cache hit for the current paragraph yet. Falling back to cached symbols that still match the current filters.'
+                                  : 'Showing cached symbols directly so you can browse beyond the current paragraph-aware ranking.'}
                             </p>
                           ) : null}
                           {repoSymbolCacheEntries.length ? (
+                            visibleRepoSymbolCacheEntries.length ? (
                             <div className="saved-mapping-list">
                               {visibleRepoSymbolCacheEntries.map((entry) => (
                                 <article key={entry.id} className="candidate-card candidate-card-compact">
@@ -1532,6 +1589,11 @@ export default function WorkspacePage() {
                                 </article>
                               ))}
                             </div>
+                            ) : (
+                              <div className="empty-inline-state">
+                                No cached symbols match the current symbol-cache filters.
+                              </div>
+                            )
                           ) : (
                             <div className="empty-inline-state">
                               No extractable symbols yet from the currently indexed key files.
@@ -2640,6 +2702,17 @@ function matchesSnapshotSearch(snapshot: StoredComposerSnapshot, rawQuery: strin
     snapshot.note ?? '',
     ...(snapshot.ideaTags ?? []),
   ].some((field) => field.toLowerCase().includes(query))
+}
+
+function matchesRepoSymbolCacheEntry(entry: RepoSymbolCacheEntry, rawQuery: string): boolean {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) {
+    return true
+  }
+
+  return [entry.symbol, entry.path, entry.fileName, entry.snippet ?? ''].some((field) =>
+    field.toLowerCase().includes(query),
+  )
 }
 
 function matchesSnapshotVisibility(

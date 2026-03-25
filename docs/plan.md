@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:09 (Asia/Shanghai)  
+最后更新：2026-03-25 19:18 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1473,6 +1473,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否给 symbol cache 增加更细的搜索或展开策略
 - 继续推进 `WP-H`：评估是否把 snapshot/detail 操作进一步下沉出页面层
 
+
+### 2026-03-25 19:18 / Phase 4 symbol cache browse pass
+
+#### 已完成
+
+- `Indexed Symbol Cache` 现在支持按 `symbol / path / snippet` 搜索，不再只能看固定排序结果
+- 新增 `Focused hits / All cached` 视图模式，可以在 paragraph-aware ranking 和直接浏览缓存之间切换
+- symbol cache 区开始支持 `Show All / Collapse`，避免只有前几条可见而看不到完整 cache
+- 当前标题统计也会同时显示 `visible / matching / cached`，让筛选后的范围更可见
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里关于 symbol cache 的浏览层已经补上，repo preview 不再只是“能解释”，也开始“能查找、能展开”
+- 当前这个能力与前面的 ranking pass 形成闭环：先按段落聚焦，再允许用户切回完整 cache 自己探索
+- 这一步继续保持轻量，不需要额外的新页面或复杂面板，就能明显提高 repo cache 的可用性
+
+#### 遇到的问题
+
+- 当前搜索仍是简单文本包含，不是更高级的模糊匹配或多字段权重检索
+- `All cached` 视图仍复用当前缓存顺序，没有单独的 path/symbol 排序控制
+- 目前还没有把 symbol cache 搜索词持久化到 local storage
+
+#### 下一步
+
+- 继续推进 `M5`：评估 snapshot 是否需要更明确的 entity 操作，例如 compare、duplicate 或版本链
+- 继续推进 `M4`：评估是否要给 `All cached` 增加更明确的排序方式
+- 继续推进 `WP-H`：评估是否把 repo/index diagnostics 进一步下沉出页面层
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1786,6 +1816,15 @@ AI 任务拆分为：
 
 - 当前更需要验证用户是否会频繁打开、复制、下载和回装 snapshot，而不是立刻把信息架构升级成新的页面层。
 - detail card 已经能显著提升 snapshot 的实体感，同时继续保持当前工作台流畅的 Local-first 交互。
+
+### D-035（2026-03-25）
+
+决定：symbol cache 的搜索与展开能力继续放在 `Indexed Symbol Cache` 原面板内，以 `Focused hits / All cached` 双模式组织，而不是拆成单独的 cache browser 页面。
+
+原因：
+
+- 当前更需要让 repo preview 内部形成“聚焦解释 + 全量浏览”的连续体验，而不是把 symbol cache 再拆成新的信息层级。
+- 双模式已经足够覆盖当前调试和探索需求，同时与现有轻量原型的复杂度控制保持一致。
 
 ## 16. 当前开放问题
 
