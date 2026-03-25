@@ -1,8 +1,8 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 20:05 (Asia/Shanghai)  
-当前阶段：Phase 4 in progress + Phase 5 in progress  
+最后更新：2026-03-25 20:11 (Asia/Shanghai)  
+当前阶段：Phase 4 in progress + Phase 5 in progress + WP-H in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
 ## 1. 文档目的
@@ -1800,6 +1800,36 @@ AI 任务拆分为：
 - 继续推进 `M5`：评估 lineage 是否真的需要升级为更深层 tree/history
 - 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
 
+
+### 2026-03-25 20:11 / WP-H repo indexing orchestration pass
+
+#### 已完成
+
+- 重新对照当前文件夹、`WorkspacePage` 结构和最近 git 提交，确认 `WP-H` 的主问题已经从“helper 散落”转向“异步编排仍堆在页面层”
+- 将 repo index 单仓库拉取与 sample warm-up 的异步编排继续下沉到 `src/features/code-link/indexing.ts`
+- 新增 `resolveRepoIndex` 与 `warmSampleRegressionIndexes`，统一处理 cache reuse、network refresh、diagnostic 聚合和 active repo resolution
+- `WorkspacePage` 中的 `handleIndexRepo` 与 `handleWarmSampleRegressionIndexes` 现在只保留按钮触发、UI 状态同步和结果落盘，不再自己循环 demo sample 或拼 diagnostics
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `WP-H` 在 code-link 这条线上已经不只是在抽纯 helper，而开始触及真正的异步编排边界
+- `WorkspacePage` 仍然很大，但 repo indexing / sample warm-up 这一块的耦合已经继续收紧，后续若抽 custom hook 或 controller 会更自然
+- 当前阶段判断不需要改档：`M4`、`M5` 仍在持续收敛，同时结构治理开始跟上功能增长速度
+
+#### 遇到的问题
+
+- repo indexing 的 loading / error / source 状态仍在页面层，尚未形成完整 controller/store
+- sample regression 与 repo index 现在分布在 `indexing.ts`、`regression.ts` 和页面层三处，边界还需要再观察
+- `M3` 的最小模型接线仍未启动，当前 Context 仍主要是 schema 和规则卡片
+
+#### 下一步
+
+- 继续推进 `WP-H`：评估是否把 repo indexing 的 loading / error / source 状态进一步下沉到 custom hook 或 controller
+- 继续推进 `WP-H`：开始清理 snapshot/detail/selection 这条线的页面状态密度
+- 继续推进 `M3`：定义最小 AI provider 接线边界，避免计划长期只在 Phase 4 / Phase 5 横向扩张
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2213,6 +2243,15 @@ AI 任务拆分为：
 - 当前更需要优先降低页面里关于 repo cache 和 warm 文案的耦合，而异步触发流程仍然紧贴工作区的按钮和状态展示。
 - 先拆 helper 能保持连续交付节奏，同时为后续是否继续抽 indexing controller/store 留出空间。
 
+### D-046（2026-03-25）
+
+决定：repo indexing 的下一轮收敛先把单仓库索引与 sample warm-up 的异步编排抽进 `indexing.ts`，页面层只保留 UI state 与触发，不立即上完整 custom hook/store。
+
+原因：
+
+- 这样可以先把网络拉取、缓存复用和 diagnostic 聚合这些真正会继续膨胀的流程从页面里拿走，收益比继续抽零散 helper 更直接。
+- 同时可以避免过早把 repo indexing 和工作区其他状态捆进一套还未验证的全局状态模型。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
@@ -2221,7 +2260,9 @@ AI 任务拆分为：
 2. 第一版图表解释是否进 Phase 6，还是提前做一个轻量版？
 3. 桌面壳何时介入，是否在 Web 原型稳定后再评估？
 4. Web-first 原型里，本地仓库读取是先通过后端桥接，还是先以 GitHub URL 演示为主？
-5. `named snapshots` 加上元数据与管理动作后是否已经足够，还是仍需要升级为真正的 draft 实体与列表页？
+5. 当前 `snapshot` 已具备 detail / duplicate / lineage 后，是否已经足够，还是仍需要升级为真正的 draft 实体与列表页？
+6. repo indexing / sample warm-up 下一步是抽成 custom hook / controller，还是继续维持“feature function + page state”的半下沉结构？
+7. `M3` 的最小模型接线应先只接 `OpenAI-compatible`，还是同步保留 `Ollama` 的 adapter shell？
 
 ## 17. 审批后的固定规则
 
@@ -2236,11 +2277,11 @@ AI 任务拆分为：
 
 接下来应按以下顺序继续：
 
-1. 继续深化 GitHub 远程索引：补强 artifact 排序、文件跳转与缓存策略。
-2. 继续推进 Code Link：从已有的 symbol / line 目标定位走向第二样本回归与更稳的 ranking。
-3. 继续补强 Idea Workspace：评估 snapshot 是否升级为正式 draft 实体，并继续收敛组织能力。
-4. 评估是否把 repo index / confirmation memory / composer selection / idea storage 继续抽成独立 store，推进 WP-H。
-5. 评估是否需要把主样本之外的 LoRA / CLIP 作为回归样本加入验证。
+1. 继续推进 `WP-H`：评估是否把 repo indexing 的 loading / error / source 状态抽成 custom hook 或 controller，进一步压缩页面层异步编排。
+2. 继续推进 `WP-H`：开始清理 snapshot/detail/selection 这条线的页面状态密度，判断是否抽独立 action/helper 或局部 store。
+3. 继续推进 `M3`：定义最小 AI provider 接线边界，把 Context 从规则卡片推进到可替换的模型输出链路。
+4. 继续推进 `M4`：在现有 code-link explainability 基础上，继续观察 `indexing.ts`、`regression.ts`、`mappings.ts` 的边界是否还要再拆。
+5. 继续推进 `M5`：根据 snapshot detail / duplicate / lineage 的真实使用路径，决定是否升级为正式 draft 实体与列表页。
 6. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
 
 ## 19. 当前迭代执行拆解（Iteration B）

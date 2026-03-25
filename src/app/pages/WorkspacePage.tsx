@@ -11,15 +11,13 @@ import {
   type DemoSampleId,
 } from '../../features/code-link/demoSamples'
 import {
-  fetchGitHubRepoIndex,
   type GitHubRepoIndex,
 } from '../../features/code-link/github'
 import {
-  buildCachedSampleRegressionDiagnostic,
-  buildRefreshedSampleRegressionDiagnostic,
   buildSampleRegressionWarmStatus,
   getCachedRepoIndex,
-  storeRepoIndexInCache,
+  resolveRepoIndex,
+  warmSampleRegressionIndexes,
 } from '../../features/code-link/indexing'
 import {
   buildCodeBacklinkGroups,
@@ -37,7 +35,6 @@ import {
   buildRepoIndexStatusSignals,
   buildSampleRegressionPreviews,
   buildSampleRegressionRepoIndexes,
-  classifySampleRegressionDiagnosticReason,
   type RepoIndexSource,
   type SampleRegressionDiagnostic,
 } from '../../features/code-link/regression'
@@ -566,34 +563,25 @@ export default function WorkspacePage() {
     setRepoSource(nextSample.repoUrl)
   }
 
-  function cacheRepoIndex(nextIndex: GitHubRepoIndex) {
-    const normalizedIndex = storeRepoIndexInCache(repoIndexCacheRef.current, nextIndex)
-    setRepoIndexCacheVersion((version) => version + 1)
-    return normalizedIndex
-  }
-
   async function handleIndexRepo(forceRefresh = false) {
     if (repoAnalysis.kind !== 'github') {
       return
-    }
-
-    if (!forceRefresh) {
-      const cachedIndex = getCachedRepoIndex(repoIndexCacheRef.current, effectiveRepoSource)
-      if (cachedIndex) {
-        setRepoIndex(cachedIndex)
-        setRepoIndexError(null)
-        setRepoIndexSource('cache')
-        return
-      }
     }
 
     setIsIndexingRepo(true)
     setRepoIndexError(null)
 
     try {
-      const nextIndex = cacheRepoIndex(await fetchGitHubRepoIndex(effectiveRepoSource))
-      setRepoIndex(nextIndex)
-      setRepoIndexSource('network')
+      const nextResolution = await resolveRepoIndex(
+        repoIndexCacheRef.current,
+        effectiveRepoSource,
+        forceRefresh,
+      )
+      if (nextResolution.cacheUpdated) {
+        setRepoIndexCacheVersion((version) => version + 1)
+      }
+      setRepoIndex(nextResolution.index)
+      setRepoIndexSource(nextResolution.source)
     } catch (indexError: unknown) {
       setRepoIndexError(getErrorMessage(indexError, 'Failed to index this GitHub repository.'))
     } finally {
@@ -604,45 +592,37 @@ export default function WorkspacePage() {
   async function handleWarmSampleRegressionIndexes(forceRefresh = false) {
     setIsIndexingSampleRegression(true)
     setSampleRegressionIndexStatus(null)
+    try {
+      const nextWarmResult = await warmSampleRegressionIndexes(
+        repoIndexCacheRef.current,
+        effectiveRepoSource,
+        matchedDemoSample.id,
+        forceRefresh,
+        formatRelativeTime,
+        formatIdeaTime,
+        getErrorMessage,
+      )
 
-    let indexedCount = 0
-    let reusedCount = 0
-    const failedSamples: string[] = []
-    const nextDiagnostics: Partial<Record<DemoSampleId, SampleRegressionDiagnostic>> = {}
-
-    for (const sample of demoSamples) {
-      const cachedIndex = getCachedRepoIndex(repoIndexCacheRef.current, sample.repoUrl)
-      if (!forceRefresh && cachedIndex) {
-        reusedCount += 1
-        nextDiagnostics[sample.id] = buildCachedSampleRegressionDiagnostic(cachedIndex, formatRelativeTime)
-        continue
+      if (nextWarmResult.indexedCount > 0) {
+        setRepoIndexCacheVersion((version) => version + 1)
+      }
+      if (nextWarmResult.activeRepoResolution) {
+        setRepoIndex(nextWarmResult.activeRepoResolution.index)
+        setRepoIndexError(null)
+        setRepoIndexSource(nextWarmResult.activeRepoResolution.source)
       }
 
-      try {
-        const nextIndex = cacheRepoIndex(await fetchGitHubRepoIndex(sample.repoUrl))
-        indexedCount += 1
-        nextDiagnostics[sample.id] = buildRefreshedSampleRegressionDiagnostic(nextIndex, formatIdeaTime)
-
-        if (sample.id === matchedDemoSample.id && effectiveRepoSource === sample.repoUrl) {
-          setRepoIndex(nextIndex)
-          setRepoIndexError(null)
-          setRepoIndexSource('network')
-        }
-      } catch (indexError: unknown) {
-        const detail = getErrorMessage(indexError, 'Failed to index this sample repository.')
-        failedSamples.push(sample.label)
-        nextDiagnostics[sample.id] = {
-          status: 'failed',
-          detail,
-          reason: classifySampleRegressionDiagnosticReason(detail),
-        }
-      }
+      setSampleRegressionDiagnostics(nextWarmResult.diagnostics)
+      setSampleRegressionIndexStatus(
+        buildSampleRegressionWarmStatus(
+          nextWarmResult.indexedCount,
+          nextWarmResult.reusedCount,
+          nextWarmResult.failedSamples,
+        ),
+      )
+    } finally {
+      setIsIndexingSampleRegression(false)
     }
-
-    setSampleRegressionDiagnostics(nextDiagnostics)
-    setSampleRegressionIndexStatus(buildSampleRegressionWarmStatus(indexedCount, reusedCount, failedSamples))
-
-    setIsIndexingSampleRegression(false)
   }
 
   function handlePreviousPage() {
