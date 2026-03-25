@@ -77,6 +77,7 @@ export type CodeCandidate = {
   symbol: string
   path: string
   reason: string
+  signals?: string[]
   confidence: 'High' | 'Medium' | 'Low'
   targetUrl?: string
   lineNumber?: number

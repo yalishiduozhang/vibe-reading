@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 17:37 (Asia/Shanghai)  
+最后更新：2026-03-25 17:40 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1086,6 +1086,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：在不让 UI 过重的前提下补更明确的 ranking signal / snippet 展示
 - 继续推进 `M5`：继续评估 snapshot 是否升级为正式 draft 实体，并补更强的组织动作
 
+
+### 2026-03-25 17:40 / Phase 4 ranking signal pass
+
+#### 已完成
+
+- 为 `CodeCandidate` 增加可选 `signals` 字段，并把 indexed candidate 的匹配信号从内部排序过程显式暴露出来
+- sample fallback candidate 现在也会带最小 signal 集合，不再只有长段 reason
+- confirmation memory 开始持久化并显示 ranking signals，避免“确认后只剩结果、不剩解释”
+- Active candidates 与 `Cross-sample Regression` 都开始显示 signal chips，ranking 过程比之前更可见
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 当前已经从“能打开代码目标”继续推进到“能解释为什么是这个目标”
+- 当前候选链路开始具备 `target + signal + reason` 三层解释结构，后续无论是调 ranking 还是做演示都更稳
+- 这一轮把 Code Link 的 explainability 从页面文案层推进到了数据结构层，后续 confirmation memory 和回归视图可以继续复用
+
+#### 遇到的问题
+
+- signal 目前仍是轻量字符串摘要，不是统一的结构化 score 明细
+- 旧的本地 confirmation memory 记录不会自动补齐新 signal，只会在后续新确认时逐步积累
+- 还没有把 repo snippet 和 signal 更直接绑定起来，当前仍以短标签解释为主
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否为 indexed candidate 增加 snippet 预览，让 signal 和源码片段更直接对应
+- 继续推进 `M4`：评估 LoRA / CLIP 是否也进入真实远程索引链路，而不只停在 preset fallback
+- 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1282,6 +1312,15 @@ AI 任务拆分为：
 
 - 这样可以直接复用当前 `buildCodeCandidates` 主链路，让回归观察和真实产品行为保持一致。
 - 在 `M4` 尚未封板前，把回归入口放进工作区本身，比维护另一套专用验证界面更稳妥。
+
+### D-022（2026-03-25）
+
+决定：Code Link 的 explainability 先采用 `signals + reason` 的轻量双层结构，而不是立即引入完整的评分明细面板。
+
+原因：
+
+- 当前阶段更需要让候选排序“可见、可解释、可持久化”，而不是过早把排序器做成复杂调试系统。
+- 这条路径已经能同时服务 active candidate、confirmation memory 和 cross-sample regression，复用价值更高。
 
 ## 16. 当前开放问题
 

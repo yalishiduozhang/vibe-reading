@@ -19,6 +19,7 @@ export type StoredCodeLinkDecision = {
   targetUrl?: string
   lineNumber?: number
   reason: string
+  signals?: string[]
   confidence: CodeCandidate['confidence']
   createdAt: string
 }
@@ -44,6 +45,7 @@ export function buildCodeLinkDecision(
     targetUrl: candidate.targetUrl,
     lineNumber: candidate.lineNumber,
     reason: candidate.reason,
+    signals: candidate.signals,
     confidence: candidate.confidence,
     createdAt: new Date().toISOString(),
   }
@@ -103,6 +105,8 @@ function isStoredCodeLinkDecision(value: unknown): value is StoredCodeLinkDecisi
     (candidate.targetUrl === undefined || typeof candidate.targetUrl === 'string') &&
     (candidate.lineNumber === undefined || typeof candidate.lineNumber === 'number') &&
     typeof candidate.reason === 'string' &&
+    (candidate.signals === undefined ||
+      (Array.isArray(candidate.signals) && candidate.signals.every((signal) => typeof signal === 'string'))) &&
     typeof candidate.confidence === 'string' &&
     typeof candidate.createdAt === 'string'
   )

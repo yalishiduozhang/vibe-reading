@@ -1332,6 +1332,18 @@ export default function WorkspacePage() {
                                 preview.topCandidate.lineNumber,
                               )}
                             </p>
+                            {preview.topCandidate.signals?.length ? (
+                              <div className="repo-signal-list">
+                                {preview.topCandidate.signals.map((signal) => (
+                                  <span
+                                    key={`${preview.sample.id}-${preview.topCandidate?.id}-${signal}`}
+                                    className="repo-signal-item"
+                                  >
+                                    {signal}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
                             <p>{preview.topCandidate.reason}</p>
                           </>
                         ) : (
@@ -1378,6 +1390,15 @@ export default function WorkspacePage() {
                         <p className="candidate-path">
                           {formatCodeTargetPath(decision.path, decision.lineNumber)}
                         </p>
+                        {decision.signals?.length ? (
+                          <div className="repo-signal-list">
+                            {decision.signals.map((signal) => (
+                              <span key={`${decision.id}-${signal}`} className="repo-signal-item">
+                                {signal}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <p>{decision.paragraphLabel}</p>
                         <div className="candidate-actions">
                           <button
@@ -1481,6 +1502,15 @@ export default function WorkspacePage() {
                           <p className="candidate-path">
                             {formatCodeTargetPath(candidate.path, candidate.lineNumber)}
                           </p>
+                          {candidate.signals?.length ? (
+                            <div className="repo-signal-list">
+                              {candidate.signals.map((signal) => (
+                                <span key={`${candidate.id}-${signal}`} className="repo-signal-item">
+                                  {signal}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
                           <p>{candidate.reason}</p>
                           <div className="candidate-actions">
                             {candidate.targetUrl ? (
