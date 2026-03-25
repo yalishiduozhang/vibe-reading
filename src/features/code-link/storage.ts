@@ -1,4 +1,5 @@
 import type { GitHubDirectorySnapshot, GitHubRepoEntry, GitHubRepoFile, GitHubRepoIndex } from './github'
+import { buildRepoSymbolCache, type RepoSymbolCacheEntry } from './symbols'
 
 const repoIndexCacheStorageKey = 'openviberead.repo-index-cache.v1'
 const maxStoredRepoIndexes = 6
@@ -19,7 +20,7 @@ export function loadStoredRepoIndexCache(): Record<string, GitHubRepoIndex> {
       return {}
     }
 
-    const indexes = parsed.filter(isGitHubRepoIndex)
+    const indexes = parsed.filter(isGitHubRepoIndex).map(enrichRepoIndex)
     return Object.fromEntries(indexes.map((index) => [index.repoUrl, index]))
   } catch {
     return {}
@@ -33,6 +34,7 @@ export function saveStoredRepoIndexCache(cache: Record<string, GitHubRepoIndex>)
 
   const trimmedIndexes = Object.values(cache)
     .filter(isGitHubRepoIndex)
+    .map(enrichRepoIndex)
     .sort(
       (left, right) =>
         new Date(right.generatedAt).getTime() - new Date(left.generatedAt).getTime() ||
@@ -41,6 +43,16 @@ export function saveStoredRepoIndexCache(cache: Record<string, GitHubRepoIndex>)
     .slice(0, maxStoredRepoIndexes)
 
   window.localStorage.setItem(repoIndexCacheStorageKey, JSON.stringify(trimmedIndexes))
+}
+
+export function enrichRepoIndex(index: GitHubRepoIndex): GitHubRepoIndex {
+  return {
+    ...index,
+    symbolCache:
+      Array.isArray(index.symbolCache) && index.symbolCache.every(isRepoSymbolCacheEntry)
+        ? index.symbolCache
+        : buildRepoSymbolCache(index),
+  }
 }
 
 function isGitHubRepoIndex(value: unknown): value is GitHubRepoIndex {
@@ -61,6 +73,8 @@ function isGitHubRepoIndex(value: unknown): value is GitHubRepoIndex {
     candidate.scannedDirectories.every(isGitHubDirectorySnapshot) &&
     Array.isArray(candidate.keyFiles) &&
     candidate.keyFiles.every(isGitHubRepoFile) &&
+    (candidate.symbolCache === undefined ||
+      (Array.isArray(candidate.symbolCache) && candidate.symbolCache.every(isRepoSymbolCacheEntry))) &&
     typeof candidate.generatedAt === 'string'
   )
 }
@@ -105,5 +119,22 @@ function isGitHubRepoFile(value: unknown): value is GitHubRepoFile {
     typeof candidate.size === 'number' &&
     typeof candidate.htmlUrl === 'string' &&
     typeof candidate.text === 'string'
+  )
+}
+
+function isRepoSymbolCacheEntry(value: unknown): value is RepoSymbolCacheEntry {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+
+  const candidate = value as Partial<RepoSymbolCacheEntry>
+  return (
+    typeof candidate.id === 'string' &&
+    typeof candidate.symbol === 'string' &&
+    typeof candidate.path === 'string' &&
+    typeof candidate.fileName === 'string' &&
+    typeof candidate.lineNumber === 'number' &&
+    typeof candidate.targetUrl === 'string' &&
+    (candidate.snippet === undefined || typeof candidate.snippet === 'string')
   )
 }

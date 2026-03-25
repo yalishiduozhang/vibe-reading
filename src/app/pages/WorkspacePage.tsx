@@ -24,11 +24,11 @@ import {
   type StoredCodeLinkDecision,
 } from '../../features/code-link/mappings'
 import {
+  enrichRepoIndex,
   loadStoredRepoIndexCache,
   saveStoredRepoIndexCache,
 } from '../../features/code-link/storage'
 import {
-  buildRepoSymbolCache,
   type RepoSymbolCacheEntry,
 } from '../../features/code-link/symbols'
 import {
@@ -300,7 +300,7 @@ export default function WorkspacePage() {
     repoIndexCacheRef.current,
     repoIndexCacheVersion,
   )
-  const repoSymbolCacheEntries: RepoSymbolCacheEntry[] = repoIndex ? buildRepoSymbolCache(repoIndex) : []
+  const repoSymbolCacheEntries: RepoSymbolCacheEntry[] = repoIndex?.symbolCache ?? []
   const repoIndexStatusSignals = repoIndex ? buildRepoIndexStatusSignals(repoIndex, repoIndexSource) : []
   const codeCandidates = buildCodeCandidates(
     selectedParagraph,
@@ -514,8 +514,10 @@ export default function WorkspacePage() {
   }
 
   function cacheRepoIndex(nextIndex: GitHubRepoIndex) {
-    repoIndexCacheRef.current[nextIndex.repoUrl] = nextIndex
+    const normalizedIndex = enrichRepoIndex(nextIndex)
+    repoIndexCacheRef.current[normalizedIndex.repoUrl] = normalizedIndex
     setRepoIndexCacheVersion((version) => version + 1)
+    return normalizedIndex
   }
 
   async function handleIndexRepo(forceRefresh = false) {
@@ -537,8 +539,7 @@ export default function WorkspacePage() {
     setRepoIndexError(null)
 
     try {
-      const nextIndex = await fetchGitHubRepoIndex(effectiveRepoSource)
-      cacheRepoIndex(nextIndex)
+      const nextIndex = cacheRepoIndex(await fetchGitHubRepoIndex(effectiveRepoSource))
       setRepoIndex(nextIndex)
       setRepoIndexSource('network')
     } catch (indexError: unknown) {
@@ -569,8 +570,7 @@ export default function WorkspacePage() {
       }
 
       try {
-        const nextIndex = await fetchGitHubRepoIndex(sample.repoUrl)
-        cacheRepoIndex(nextIndex)
+        const nextIndex = cacheRepoIndex(await fetchGitHubRepoIndex(sample.repoUrl))
         indexedCount += 1
         nextDiagnostics[sample.id] = {
           status: 'refreshed',

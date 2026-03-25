@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 18:56 (Asia/Shanghai)  
+最后更新：2026-03-25 18:59 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1353,6 +1353,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否把 symbol cache 进一步并入 repo index 的持久化结构
 - 继续推进 `M4`：评估是否把 regression diagnostics 做成更明确的错误类型与刷新建议
 
+
+### 2026-03-25 18:59 / Phase 4 symbol cache persistence pass
+
+#### 已完成
+
+- `GitHubRepoIndex` 开始显式支持 `symbolCache` 字段，repo index 的最小结构不再只停留在 `keyFiles`
+- 新增 `enrichRepoIndex`，在读取旧缓存、写入新缓存和运行时接入网络索引时都会统一补齐 `symbolCache`
+- `WorkspacePage` 中的 `Remote Repo Index` 不再每次重新运行 `buildRepoSymbolCache`，而是直接复用 `repoIndex.symbolCache`
+- 这让 repo preview、candidate generation 和 repo index cache 的组织方式进一步对齐
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里关于 symbol cache 的持久化边界已经进一步收敛，不再只是运行时派生能力
+- 当前 repo index cache 结构更接近真正可复用的 artifact cache，后续继续做 cache 诊断或排序时更稳
+- 这一步也继续推进了 `WP-H`：页面层开始直接消费 feature 层已经归一化的数据结构
+
+#### 遇到的问题
+
+- 当前 `symbolCache` 仍然来自少量 indexed key files，不是完整 repo 范围
+- 旧缓存虽然会在读取时自动 enrich，但还没有单独的版本迁移字段
+- 目前还没有围绕 `symbolCache` 建更细的搜索、排序或淘汰策略
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否给 `symbolCache` 增加更明确的排序和命中解释
+- 继续推进 `M4`：评估是否把 regression diagnostics 做成更明确的错误类型与刷新建议
+- 继续推进 `M5`：继续评估 snapshot 是否需要升级为更稳定的 draft/entity 视图
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1630,6 +1660,15 @@ AI 任务拆分为：
 
 - 当前更需要验证用户是否真的需要频繁查看 snapshot 内容，而不是立刻扩展页面结构。
 - 列表内预览已经能显著提高判断效率，同时保持当前工作区的信息密度和实现成本平衡。
+
+### D-031（2026-03-25）
+
+决定：在 `symbol cache` 的字段和展示方式初步稳定后，开始把它并入 repo index 的持久化结构，而不是继续只保留运行时派生。
+
+原因：
+
+- 当前 repo preview、repo cache 和后续候选生成都已经开始共享这层结构，继续只做运行时派生会重复计算并弱化 cache 的意义。
+- 通过 `enrich` 方式并入持久化结构，可以兼容旧缓存，同时保持当前字段仍可继续低成本演化。
 
 ## 16. 当前开放问题
 

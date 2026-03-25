@@ -1,3 +1,5 @@
+import type { RepoSymbolCacheEntry } from './symbols'
+
 import { normalizeGitHubUrl } from './source'
 
 const githubApiBase = 'https://api.github.com'
@@ -70,6 +72,7 @@ export type GitHubRepoIndex = {
   rootEntries: GitHubRepoEntry[]
   scannedDirectories: GitHubDirectorySnapshot[]
   keyFiles: GitHubRepoFile[]
+  symbolCache?: RepoSymbolCacheEntry[]
   generatedAt: string
 }
 
