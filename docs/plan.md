@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:03 (Asia/Shanghai)  
+最后更新：2026-03-25 19:05 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1413,6 +1413,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否给 symbol cache 增加更细的搜索或展开策略
 - 继续推进 `M5`：继续评估 snapshot 是否需要升级为更稳定的 draft/entity 视图
 
+
+### 2026-03-25 19:05 / Phase 4 regression error classification pass
+
+#### 已完成
+
+- `Cross-sample Regression` 的失败诊断开始带上最小错误类型，不再只有一段 detail 文本
+- 当前 warm 失败会区分 `network / repo not found / rate limit / unsupported source / unknown`
+- 刷新建议开始根据错误类型分流，而不是所有失败都回到同一句通用提示
+- 这让回归区已经具备更明确的失败路径解释，而不是只展示“失败了，请重试”
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里关于 regression diagnostics 的错误类型层已经补上，回归区更接近真正可调试工作台
+- 当前失败分类仍保持轻量，但已经足够支撑“看懂失败原因 + 决定下一步动作”
+- 这一步继续避免把系统拉向复杂监控面板，而是优先补足可解释性短板
+
+#### 遇到的问题
+
+- 当前错误分类仍依赖 detail 文本启发式解析，不是更严格的错误码系统
+- 还没有跨次统计不同错误类型的频率或历史
+- 如果未来接入本地 repo bridge，还需要扩展新的失败类型
+
+#### 下一步
+
+- 继续推进 `M5`：继续评估 snapshot 是否需要升级为更稳定的 draft/entity 视图
+- 继续推进 `M4`：评估是否给 symbol cache 增加更细的搜索或展开策略
+- 继续推进 `WP-H`：评估是否把 repo/index diagnostics 进一步下沉出页面层
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1708,6 +1738,15 @@ AI 任务拆分为：
 
 - 当前更需要的是让 repo preview 内部直接体现“哪些 cached symbols 对当前段落最相关”，而不是再增加一层新的界面结构。
 - 复用现有卡片和 signal chips，可以让 symbol cache explainability 与 active candidate explainability 保持同一视觉语言。
+
+### D-033（2026-03-25）
+
+决定：regression diagnostics 的错误分类第一轮继续采用 detail 文本启发式归类，而不是立即引入更重的结构化错误协议。
+
+原因：
+
+- 当前 warm sample indexes 的失败来源仍然比较少，用轻量归类就足以支撑刷新建议和调试判断。
+- 先把 `type + hint` 补齐，可以更快提高可解释性，同时保留后续再升级为结构化错误码的空间。
 
 ## 16. 当前开放问题
 

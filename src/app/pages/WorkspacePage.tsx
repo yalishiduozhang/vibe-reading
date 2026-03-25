@@ -76,9 +76,11 @@ type IdeaTagFilter = IdeaTag | typeof allTagsFilterLabel
 type IdeaTimeFilter = (typeof timeFilters)[number]
 type SnapshotVisibilityFilter = (typeof snapshotVisibilityFilters)[number]
 type RepoIndexSource = 'none' | 'cache' | 'network'
+type SampleRegressionDiagnosticReason = 'network' | 'not-found' | 'rate-limit' | 'unsupported' | 'unknown'
 type SampleRegressionDiagnostic = {
   status: 'cached' | 'refreshed' | 'failed'
   detail?: string
+  reason?: SampleRegressionDiagnosticReason
 }
 type PendingJump = {
   pageNumber: number
@@ -596,10 +598,12 @@ export default function WorkspacePage() {
           setRepoIndexSource('network')
         }
       } catch (indexError: unknown) {
+        const detail = getErrorMessage(indexError, 'Failed to index this sample repository.')
         failedSamples.push(sample.label)
         nextDiagnostics[sample.id] = {
           status: 'failed',
-          detail: getErrorMessage(indexError, 'Failed to index this sample repository.'),
+          detail,
+          reason: classifySampleRegressionDiagnosticReason(detail),
         }
       }
     }
@@ -2523,6 +2527,28 @@ function getErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
+function classifySampleRegressionDiagnosticReason(detail: string): SampleRegressionDiagnosticReason {
+  const loweredDetail = detail.toLowerCase()
+
+  if (/rate limit|api limit|too many requests|403/.test(loweredDetail)) {
+    return 'rate-limit'
+  }
+
+  if (/404|not found|no such repo/.test(loweredDetail)) {
+    return 'not-found'
+  }
+
+  if (/not a supported github repository url|unsupported github repository url/.test(loweredDetail)) {
+    return 'unsupported'
+  }
+
+  if (/failed to fetch|network|load failed|timed out|timeout|temporarily unavailable|dns/.test(loweredDetail)) {
+    return 'network'
+  }
+
+  return 'unknown'
+}
+
 function getIdeaDocumentName(idea: StoredIdea): string {
   return idea.documentName?.trim() || 'Unknown paper'
 }
@@ -2646,7 +2672,7 @@ function buildSampleRegressionCacheSignals(
 ): string[] {
   const prefix =
     diagnostic?.status === 'failed'
-      ? ['warm failed']
+      ? ['warm failed', `error: ${formatSampleRegressionDiagnosticReason(diagnostic.reason)}`]
       : diagnostic?.status === 'refreshed'
         ? ['warm refreshed']
         : diagnostic?.status === 'cached'
@@ -2665,7 +2691,18 @@ function buildSampleRegressionRefreshHint(
   diagnostic?: SampleRegressionDiagnostic,
 ): string | undefined {
   if (diagnostic?.status === 'failed') {
-    return 'Try Refresh Sample Indexes after checking network availability or the upstream repo response.'
+    switch (diagnostic.reason) {
+      case 'rate-limit':
+        return 'Try Refresh Sample Indexes later or reduce repeated refreshes to avoid the current GitHub API limit.'
+      case 'not-found':
+        return 'Check whether the sample repo URL or upstream default branch changed before retrying.'
+      case 'unsupported':
+        return 'Switch back to a supported GitHub repo URL before warming sample indexes again.'
+      case 'network':
+        return 'Try Refresh Sample Indexes after checking network availability or the upstream repo response.'
+      default:
+        return 'Try Refresh Sample Indexes again and inspect the diagnostic detail if the same failure repeats.'
+    }
   }
 
   if (!index) {
@@ -2673,6 +2710,23 @@ function buildSampleRegressionRefreshHint(
   }
 
   return undefined
+}
+
+function formatSampleRegressionDiagnosticReason(
+  reason: SampleRegressionDiagnosticReason | undefined,
+): string {
+  switch (reason) {
+    case 'rate-limit':
+      return 'rate limit'
+    case 'not-found':
+      return 'repo not found'
+    case 'unsupported':
+      return 'unsupported source'
+    case 'network':
+      return 'network issue'
+    default:
+      return 'unknown'
+  }
 }
 
 function buildSampleRegressionRepoIndexes(
