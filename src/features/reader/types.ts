@@ -68,6 +68,8 @@ export type StoredIdea = {
   paragraphId: string
   quote: string
   createdAt: string
+  updatedAt?: string
+  documentName?: string
 }
 
 export type CodeCandidate = {
@@ -76,4 +78,5 @@ export type CodeCandidate = {
   path: string
   reason: string
   confidence: 'High' | 'Medium' | 'Low'
+  targetUrl?: string
 }

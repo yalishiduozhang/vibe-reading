@@ -28,6 +28,13 @@ import {
   draftModes,
   type DraftMode,
 } from '../../features/idea-workspace/composer'
+import {
+  clearStoredComposerDraft,
+  loadStoredComposerDraft,
+  loadStoredIdeas,
+  saveStoredComposerDraft,
+  saveStoredIdeas,
+} from '../../features/idea-workspace/storage'
 import { analyzeRepoSource } from '../../features/code-link/source'
 import { buildContextCard, formatEvidenceRef } from '../../features/reader/context'
 import { loadPdfDocument, renderPdfPage } from '../../features/reader/pdf'
@@ -43,10 +50,14 @@ import type {
 } from '../../features/reader/types'
 import { ideaTags, readingIntents } from '../../features/reader/types'
 
-const ideaStorageKey = 'openviberead.ideas.v1'
 const repoStorageKey = 'openviberead.repo-source.v1'
+const allPapersFilterLabel = 'All papers'
+const allTagsFilterLabel = 'All tags'
+const timeFilters = ['All time', 'Last 24h', 'Last 7d'] as const
 
 type AssistTab = 'context' | 'code'
+type IdeaTagFilter = IdeaTag | typeof allTagsFilterLabel
+type IdeaTimeFilter = (typeof timeFilters)[number]
 type PendingJump = {
   pageNumber: number
   paragraphId: string
@@ -78,15 +89,24 @@ export default function WorkspacePage() {
   const [cachedPageCount, setCachedPageCount] = useState(0)
   const [draftIdea, setDraftIdea] = useState('')
   const [draftTag, setDraftTag] = useState<IdeaTag>('Improvement')
-  const [draftMode, setDraftMode] = useState<DraftMode>('Project proposal')
-  const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>([])
-  const [composerMarkdown, setComposerMarkdown] = useState('')
+  const [ideaSearchQuery, setIdeaSearchQuery] = useState('')
+  const [ideaTagFilter, setIdeaTagFilter] = useState<IdeaTagFilter>(allTagsFilterLabel)
+  const [ideaDocumentFilter, setIdeaDocumentFilter] = useState(allPapersFilterLabel)
+  const [ideaTimeFilter, setIdeaTimeFilter] = useState<IdeaTimeFilter>('All time')
+  const [editingIdeaId, setEditingIdeaId] = useState('')
+  const [editingIdeaText, setEditingIdeaText] = useState('')
+  const [editingIdeaTag, setEditingIdeaTag] = useState<IdeaTag>('Improvement')
+  const [ideaStatus, setIdeaStatus] = useState<string | null>(null)
+  const [draftMode, setDraftMode] = useState<DraftMode>(() => loadStoredComposerDraft()?.draftMode ?? 'Project proposal')
+  const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>(() => loadStoredComposerDraft()?.selectedIdeaIds ?? [])
+  const [composerMarkdown, setComposerMarkdown] = useState(() => loadStoredComposerDraft()?.markdown ?? '')
   const [composerStatus, setComposerStatus] = useState<string | null>(null)
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isIndexingRepo, setIsIndexingRepo] = useState(false)
+  const restoredComposerSelectionKeyRef = useRef(loadStoredComposerDraft()?.selectionKey ?? '')
 
   useEffect(() => {
     let isActive = true
@@ -199,7 +219,7 @@ export default function WorkspacePage() {
   }, [documentProxy, currentPage, intent])
 
   useEffect(() => {
-    window.localStorage.setItem(ideaStorageKey, JSON.stringify(ideas))
+    saveStoredIdeas(ideas)
   }, [ideas])
 
   useEffect(() => {
@@ -257,9 +277,25 @@ export default function WorkspacePage() {
           decision.decision === 'rejected',
       ).length
     : 0
+  const ideaDocuments = Array.from(new Set(ideas.map((idea) => getIdeaDocumentName(idea)))).sort((left, right) =>
+    left.localeCompare(right),
+  )
+  const filteredIdeas = ideas
+    .filter((idea) => matchesIdeaSearch(idea, ideaSearchQuery))
+    .filter((idea) => ideaTagFilter === allTagsFilterLabel || idea.tag === ideaTagFilter)
+    .filter(
+      (idea) => ideaDocumentFilter === allPapersFilterLabel || getIdeaDocumentName(idea) === ideaDocumentFilter,
+    )
+    .filter((idea) => matchesIdeaTimeFilter(idea, ideaTimeFilter))
+    .sort((left, right) => {
+      const leftTime = new Date(left.updatedAt ?? left.createdAt).getTime()
+      const rightTime = new Date(right.updatedAt ?? right.createdAt).getTime()
+      return rightTime - leftTime
+    })
   const selectedIdeas = ideas.filter((idea) => selectedIdeaIds.includes(idea.id))
   const ideaDraft = buildIdeaDocumentDraft(selectedIdeas, draftMode)
   const composerFileName = buildIdeaDraftFileName(ideaDraft.title)
+  const composerSelectionKey = buildComposerSelectionKey(selectedIdeaIds, draftMode)
   const pageStatus = documentProxy ? `Page ${currentPage} / ${documentProxy.numPages}` : 'No PDF loaded'
   const isRenderingPage =
     Boolean(documentProxy) &&
@@ -267,9 +303,49 @@ export default function WorkspacePage() {
   const isComposerDirty = selectedIdeas.length > 0 && composerMarkdown !== ideaDraft.markdown
 
   useEffect(() => {
-    setComposerMarkdown(ideaDraft.markdown)
-    setComposerStatus(null)
-  }, [ideaDraft.markdown])
+    if (!ideaDocuments.includes(ideaDocumentFilter) && ideaDocumentFilter !== allPapersFilterLabel) {
+      setIdeaDocumentFilter(allPapersFilterLabel)
+    }
+  }, [ideaDocumentFilter, ideaDocuments])
+
+  useEffect(() => {
+    if (!selectedIdeas.length) {
+      restoredComposerSelectionKeyRef.current = composerSelectionKey
+      setComposerMarkdown('')
+      setComposerStatus(null)
+      return
+    }
+
+    if (restoredComposerSelectionKeyRef.current === composerSelectionKey) {
+      return
+    }
+
+    const storedComposerDraft = loadStoredComposerDraft()
+    if (storedComposerDraft && storedComposerDraft.selectionKey === composerSelectionKey) {
+      setComposerMarkdown(storedComposerDraft.markdown)
+      setComposerStatus('Restored saved draft.')
+    } else {
+      setComposerMarkdown(ideaDraft.markdown)
+      setComposerStatus(null)
+    }
+
+    restoredComposerSelectionKeyRef.current = composerSelectionKey
+  }, [composerSelectionKey, ideaDraft.markdown, selectedIdeas.length])
+
+  useEffect(() => {
+    if (!selectedIdeaIds.length && !composerMarkdown.trim()) {
+      clearStoredComposerDraft()
+      return
+    }
+
+    saveStoredComposerDraft({
+      selectionKey: composerSelectionKey,
+      selectedIdeaIds,
+      draftMode,
+      markdown: composerMarkdown,
+      updatedAt: new Date().toISOString(),
+    })
+  }, [composerMarkdown, composerSelectionKey, draftMode, selectedIdeaIds])
 
   useEffect(() => {
     if (repoAnalysis.kind !== 'github') {
@@ -477,10 +553,81 @@ export default function WorkspacePage() {
       paragraphId: selectedParagraph.id,
       quote: selectedParagraph.preview,
       createdAt: new Date().toISOString(),
+      documentName: pdfFile?.name ?? 'Current paper',
     }
 
     setIdeas((currentIdeas) => [nextIdea, ...currentIdeas])
     setDraftIdea('')
+    setIdeaStatus('Idea saved to the workspace.')
+  }
+
+  function handleStartIdeaEdit(idea: StoredIdea) {
+    setEditingIdeaId(idea.id)
+    setEditingIdeaText(idea.text)
+    setEditingIdeaTag(idea.tag)
+    setIdeaStatus(null)
+  }
+
+  function handleCancelIdeaEdit() {
+    setEditingIdeaId('')
+    setEditingIdeaText('')
+    setEditingIdeaTag('Improvement')
+  }
+
+  function handleSaveIdeaEdit() {
+    if (!editingIdeaId || !editingIdeaText.trim()) {
+      return
+    }
+
+    setIdeas((currentIdeas) =>
+      currentIdeas.map((idea) =>
+        idea.id === editingIdeaId
+          ? {
+              ...idea,
+              text: editingIdeaText.trim(),
+              tag: editingIdeaTag,
+              updatedAt: new Date().toISOString(),
+            }
+          : idea,
+      ),
+    )
+    handleCancelIdeaEdit()
+    setIdeaStatus('Idea updated.')
+  }
+
+  function handleDeleteIdea(ideaId: string) {
+    setIdeas((currentIdeas) => currentIdeas.filter((idea) => idea.id !== ideaId))
+    if (editingIdeaId === ideaId) {
+      handleCancelIdeaEdit()
+    }
+    setIdeaStatus('Idea deleted.')
+  }
+
+  async function handleCopyIdea(idea: StoredIdea) {
+    if (!navigator.clipboard?.writeText) {
+      setIdeaStatus('Clipboard is unavailable in this browser.')
+      return
+    }
+
+    const payload = [
+      `[${idea.tag}] ${idea.text}`,
+      `Source: ${getIdeaDocumentName(idea)} / p.${idea.pageNumber} / ${idea.paragraphId}`,
+      `Quote: ${idea.quote}`,
+    ].join('\n')
+
+    try {
+      await navigator.clipboard.writeText(payload)
+      setIdeaStatus('Idea copied to clipboard.')
+    } catch {
+      setIdeaStatus('Failed to copy idea.')
+    }
+  }
+
+  function handleResetIdeaFilters() {
+    setIdeaSearchQuery('')
+    setIdeaTagFilter(allTagsFilterLabel)
+    setIdeaDocumentFilter(allPapersFilterLabel)
+    setIdeaTimeFilter('All time')
   }
 
   function handleToggleIdeaSelection(ideaId: string) {
@@ -942,6 +1089,16 @@ export default function WorkspacePage() {
                               </div>
                               <p className="candidate-path">{file.path}</p>
                               <p>{summarizeRepoSnippet(file.text)}</p>
+                              <div className="candidate-actions">
+                                <a
+                                  className="secondary-link secondary-link-inline"
+                                  href={file.htmlUrl}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                >
+                                  Open File
+                                </a>
+                              </div>
                             </article>
                           ))}
                         </div>
@@ -975,13 +1132,25 @@ export default function WorkspacePage() {
                         </div>
                         <p className="candidate-path">{decision.path}</p>
                         <p>{decision.paragraphLabel}</p>
-                        <button
-                          className="ghost-button ghost-button-small"
-                          onClick={() => handleJumpToConfirmedCodeLink(decision)}
-                          type="button"
-                        >
-                          Jump to Paragraph
-                        </button>
+                        <div className="candidate-actions">
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleJumpToConfirmedCodeLink(decision)}
+                            type="button"
+                          >
+                            Jump to Paragraph
+                          </button>
+                          {decision.targetUrl ? (
+                            <a
+                              className="secondary-link secondary-link-inline"
+                              href={decision.targetUrl}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              Open Code
+                            </a>
+                          ) : null}
+                        </div>
                       </article>
                     ))}
                   </div>
@@ -1015,6 +1184,16 @@ export default function WorkspacePage() {
                           <p className="candidate-path">{candidate.path}</p>
                           <p>{candidate.reason}</p>
                           <div className="candidate-actions">
+                            {candidate.targetUrl ? (
+                              <a
+                                className="secondary-link secondary-link-inline"
+                                href={candidate.targetUrl}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                Open Code
+                              </a>
+                            ) : null}
                             <button
                               className="ghost-button ghost-button-small"
                               onClick={() => handleCodeDecision(candidate, 'confirmed')}
@@ -1096,43 +1275,168 @@ export default function WorkspacePage() {
 
           <div className="panel-subhead">
             <h3>Recent ideas</h3>
-            <span>{selectedIdeas.length} selected for composer</span>
+            <span>{selectedIdeas.length} selected / {filteredIdeas.length} visible</span>
           </div>
+          <div className="idea-filter-grid">
+            <label className="control-group control-group-wide">
+              <span>Search</span>
+              <input
+                placeholder="Search text, quote, paragraph id..."
+                value={ideaSearchQuery}
+                onChange={(event) => setIdeaSearchQuery(event.target.value)}
+              />
+            </label>
+            <label className="control-group">
+              <span>Paper</span>
+              <select value={ideaDocumentFilter} onChange={(event) => setIdeaDocumentFilter(event.target.value)}>
+                <option value={allPapersFilterLabel}>{allPapersFilterLabel}</option>
+                {ideaDocuments.map((documentName) => (
+                  <option key={documentName} value={documentName}>
+                    {documentName}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="control-group">
+              <span>Tag</span>
+              <select
+                value={ideaTagFilter}
+                onChange={(event) => setIdeaTagFilter(event.target.value as IdeaTagFilter)}
+              >
+                <option value={allTagsFilterLabel}>{allTagsFilterLabel}</option>
+                {ideaTags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="control-group">
+              <span>Time</span>
+              <select
+                value={ideaTimeFilter}
+                onChange={(event) => setIdeaTimeFilter(event.target.value as IdeaTimeFilter)}
+              >
+                {timeFilters.map((filterLabel) => (
+                  <option key={filterLabel} value={filterLabel}>
+                    {filterLabel}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="idea-filter-actions">
+              <button className="ghost-button ghost-button-small" onClick={handleResetIdeaFilters} type="button">
+                Reset Filters
+              </button>
+            </div>
+          </div>
+          {ideaStatus ? <p className="repo-analysis-note">{ideaStatus}</p> : null}
           <div className="idea-list">
-            {ideas.length ? (
-              ideas.map((idea) => {
+            {filteredIdeas.length ? (
+              filteredIdeas.map((idea) => {
                 const isSelected = selectedIdeaIds.includes(idea.id)
+                const isEditing = editingIdeaId === idea.id
                 return (
                   <article key={idea.id} className="idea-card">
                     <div className="idea-card-head">
                       <span className="term-chip">{idea.tag}</span>
-                      <small>{formatIdeaTime(idea.createdAt)}</small>
+                      <small>{formatIdeaTime(idea.updatedAt ?? idea.createdAt)}</small>
                     </div>
-                    <p>{idea.text}</p>
-                    <small>{`From p.${idea.pageNumber} / ${idea.paragraphId}`}</small>
-                    <div className="candidate-actions idea-card-actions">
-                      <button
-                        className="ghost-button ghost-button-small"
-                        onClick={() => handleJumpToIdea(idea)}
-                        type="button"
-                      >
-                        Jump to Source
-                      </button>
-                      <button
-                        className="ghost-button ghost-button-small"
-                        onClick={() => handleToggleIdeaSelection(idea.id)}
-                        type="button"
-                      >
-                        {isSelected ? 'Remove from Draft' : 'Add to Draft'}
-                      </button>
-                    </div>
+                    {isEditing ? (
+                      <>
+                        <textarea
+                          className="idea-editor"
+                          rows={5}
+                          value={editingIdeaText}
+                          onChange={(event) => setEditingIdeaText(event.target.value)}
+                        />
+                        <div className="idea-form-row">
+                          <label className="control-group">
+                            <span>Edit Tag</span>
+                            <select
+                              value={editingIdeaTag}
+                              onChange={(event) => setEditingIdeaTag(event.target.value as IdeaTag)}
+                            >
+                              {ideaTags.map((tag) => (
+                                <option key={tag} value={tag}>
+                                  {tag}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <div className="candidate-actions">
+                            <button
+                              className="ghost-button ghost-button-small"
+                              disabled={!editingIdeaText.trim()}
+                              onClick={handleSaveIdeaEdit}
+                              type="button"
+                            >
+                              Save Edit
+                            </button>
+                            <button
+                              className="ghost-button ghost-button-small"
+                              onClick={handleCancelIdeaEdit}
+                              type="button"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p>{idea.text}</p>
+                        <small>{`${getIdeaDocumentName(idea)} / p.${idea.pageNumber} / ${idea.paragraphId}`}</small>
+                        {idea.updatedAt ? (
+                          <small>{`Edited ${formatIdeaTime(idea.updatedAt)}`}</small>
+                        ) : null}
+                        <div className="candidate-actions idea-card-actions">
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleJumpToIdea(idea)}
+                            type="button"
+                          >
+                            Jump to Source
+                          </button>
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleToggleIdeaSelection(idea.id)}
+                            type="button"
+                          >
+                            {isSelected ? 'Remove from Draft' : 'Add to Draft'}
+                          </button>
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleStartIdeaEdit(idea)}
+                            type="button"
+                          >
+                            Edit
+                          </button>
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => void handleCopyIdea(idea)}
+                            type="button"
+                          >
+                            Copy
+                          </button>
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleDeleteIdea(idea.id)}
+                            type="button"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </article>
                 )
               })
             ) : (
               <div className="empty-inline-state">
-                No ideas yet. Save one from a paragraph and it will stay in local
-                storage for the next document-composer milestone.
+                {ideas.length
+                  ? 'No ideas match the current filters.'
+                  : 'No ideas yet. Save one from a paragraph and it will stay in local storage for the next document-composer milestone.'}
               </div>
             )}
           </div>
@@ -1304,51 +1608,12 @@ function makeCacheKey(pageNumber: number, intent: ReadingIntent): string {
   return `${pageNumber}:${intent}`
 }
 
-function loadStoredIdeas(): StoredIdea[] {
-  if (typeof window === 'undefined') {
-    return []
-  }
-
-  try {
-    const raw = window.localStorage.getItem(ideaStorageKey)
-    if (!raw) {
-      return []
-    }
-
-    const parsed: unknown = JSON.parse(raw)
-    if (!Array.isArray(parsed)) {
-      return []
-    }
-
-    return parsed.filter(isStoredIdea)
-  } catch {
-    return []
-  }
-}
-
 function loadStoredRepo(): string {
   if (typeof window === 'undefined') {
     return ''
   }
 
   return window.localStorage.getItem(repoStorageKey) ?? ''
-}
-
-function isStoredIdea(value: unknown): value is StoredIdea {
-  if (typeof value !== 'object' || value === null) {
-    return false
-  }
-
-  const candidate = value as Partial<StoredIdea>
-  return (
-    typeof candidate.id === 'string' &&
-    typeof candidate.text === 'string' &&
-    typeof candidate.tag === 'string' &&
-    typeof candidate.pageNumber === 'number' &&
-    typeof candidate.paragraphId === 'string' &&
-    typeof candidate.quote === 'string' &&
-    typeof candidate.createdAt === 'string'
-  )
 }
 
 function formatIdeaTime(value: string): string {
@@ -1384,4 +1649,46 @@ function getErrorMessage(error: unknown, fallback: string): string {
   }
 
   return fallback
+}
+
+function getIdeaDocumentName(idea: StoredIdea): string {
+  return idea.documentName?.trim() || 'Unknown paper'
+}
+
+function matchesIdeaSearch(idea: StoredIdea, rawQuery: string): boolean {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) {
+    return true
+  }
+
+  return [
+    idea.text,
+    idea.quote,
+    idea.paragraphId,
+    getIdeaDocumentName(idea),
+    idea.tag,
+  ].some((field) => field.toLowerCase().includes(query))
+}
+
+function matchesIdeaTimeFilter(idea: StoredIdea, filterLabel: IdeaTimeFilter): boolean {
+  if (filterLabel === 'All time') {
+    return true
+  }
+
+  const activityAt = new Date(idea.updatedAt ?? idea.createdAt).getTime()
+  if (Number.isNaN(activityAt)) {
+    return false
+  }
+
+  const elapsed = Date.now() - activityAt
+  if (filterLabel === 'Last 24h') {
+    return elapsed <= 24 * 60 * 60 * 1000
+  }
+
+  return elapsed <= 7 * 24 * 60 * 60 * 1000
+}
+
+function buildComposerSelectionKey(selectedIds: string[], mode: DraftMode): string {
+  const normalizedIds = [...selectedIds].sort((left, right) => left.localeCompare(right))
+  return `${mode}::${normalizedIds.join(',')}`
 }

@@ -71,6 +71,7 @@ function buildIndexedCodeCandidates(
     path: buildRepoPath(repoIndex.repoUrl, artifact.file.path),
     reason: buildIndexedReason(artifact.matches, artifact.file.path),
     confidence: mapScoreToConfidence(artifact.score),
+    targetUrl: artifact.file.htmlUrl,
   }))
 }
 
@@ -163,6 +164,7 @@ function buildSampleCodeCandidates(
         path: buildRepoPath(repoSource, 'segment_anything/predictor.py'),
         reason: `Strong candidate when the paragraph discusses promptable interaction, prediction flow, or user-guided masks. Current paragraph terms: ${paragraphTerms}.`,
         confidence: 'High',
+        targetUrl: buildRepoTargetUrl(repoSource, 'segment_anything/predictor.py'),
       },
       {
         id: `${paragraph.id}-candidate-sam-2`,
@@ -170,6 +172,7 @@ function buildSampleCodeCandidates(
         path: buildRepoPath(repoSource, 'segment_anything/automatic_mask_generator.py'),
         reason: 'Good fit for paragraphs about automatic mask generation, large-scale segmentation output, or prompt-free usage.',
         confidence: 'High',
+        targetUrl: buildRepoTargetUrl(repoSource, 'segment_anything/automatic_mask_generator.py'),
       },
       {
         id: `${paragraph.id}-candidate-sam-3`,
@@ -177,6 +180,7 @@ function buildSampleCodeCandidates(
         path: buildRepoPath(repoSource, 'scripts/export_onnx_model.py'),
         reason: 'Useful when the paragraph references deployment, lightweight decoding, browser inference, or the web demo path.',
         confidence: 'Medium',
+        targetUrl: buildRepoTargetUrl(repoSource, 'scripts/export_onnx_model.py'),
       },
     ]
   }
@@ -189,6 +193,7 @@ function buildSampleCodeCandidates(
         path: buildRepoPath(repoSource, 'loralib/layers.py'),
         reason: 'Best candidate for paragraphs that discuss rank decomposition, injected trainable matrices, or adapted linear layers.',
         confidence: 'High',
+        targetUrl: buildRepoTargetUrl(repoSource, 'loralib/layers.py'),
       },
       {
         id: `${paragraph.id}-candidate-lora-2`,
@@ -196,6 +201,7 @@ function buildSampleCodeCandidates(
         path: buildRepoPath(repoSource, 'loralib/layers.py'),
         reason: 'Useful when the paragraph mentions fused qkv projections or implementation-specific attention projections.',
         confidence: 'Medium',
+        targetUrl: buildRepoTargetUrl(repoSource, 'loralib/layers.py'),
       },
       {
         id: `${paragraph.id}-candidate-lora-3`,
@@ -203,6 +209,7 @@ function buildSampleCodeCandidates(
         path: buildRepoPath(repoSource, 'examples/NLG/'),
         reason: 'Useful when the paragraph shifts from method description to reproduction and downstream experiment setup.',
         confidence: 'Medium',
+        targetUrl: buildRepoTargetUrl(repoSource, 'examples/NLG/'),
       },
     ]
   }
@@ -215,6 +222,7 @@ function buildSampleCodeCandidates(
         path: buildRepoPath(repoSource, 'clip/model.py'),
         reason: 'Strong candidate when the paragraph talks about image representation extraction or visual encoder behavior.',
         confidence: 'High',
+        targetUrl: buildRepoTargetUrl(repoSource, 'clip/model.py'),
       },
       {
         id: `${paragraph.id}-candidate-clip-2`,
@@ -222,6 +230,7 @@ function buildSampleCodeCandidates(
         path: buildRepoPath(repoSource, 'clip/model.py'),
         reason: 'Useful when the paragraph emphasizes text supervision, prompt text, or language-side embeddings.',
         confidence: 'High',
+        targetUrl: buildRepoTargetUrl(repoSource, 'clip/model.py'),
       },
       {
         id: `${paragraph.id}-candidate-clip-3`,
@@ -229,6 +238,7 @@ function buildSampleCodeCandidates(
         path: buildRepoPath(repoSource, 'clip/clip.py'),
         reason: 'Useful when the paragraph is closer to zero-shot evaluation or quickstart-style usage rather than architecture details.',
         confidence: 'Medium',
+        targetUrl: buildRepoTargetUrl(repoSource, 'clip/clip.py'),
       },
     ]
   }
@@ -256,6 +266,21 @@ function buildRepoPath(repoSource: string, relativePath: string): string {
   }
 
   return `${trimmedSource}/${trimmedPath}`
+}
+
+function buildRepoTargetUrl(repoSource: string, relativePath: string): string | undefined {
+  const trimmedSource = repoSource.trim().replace(/\/+$/, '')
+  if (!/^https?:\/\/github\.com\/[^/]+\/[^/]+$/i.test(trimmedSource)) {
+    return undefined
+  }
+
+  const normalizedPath = relativePath.replace(/^\/+/, '').replace(/\/+$/, '')
+  if (!normalizedPath) {
+    return trimmedSource
+  }
+
+  const route = relativePath.endsWith('/') ? 'tree' : 'blob'
+  return `${trimmedSource}/${route}/HEAD/${normalizedPath}`
 }
 
 function slugify(value: string): string {

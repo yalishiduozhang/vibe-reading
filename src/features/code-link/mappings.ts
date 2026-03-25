@@ -16,6 +16,7 @@ export type StoredCodeLinkDecision = {
   paragraphLabel: string
   symbol: string
   path: string
+  targetUrl?: string
   reason: string
   confidence: CodeCandidate['confidence']
   createdAt: string
@@ -39,6 +40,7 @@ export function buildCodeLinkDecision(
     paragraphLabel: paragraph.evidenceLabel,
     symbol: candidate.symbol,
     path: candidate.path,
+    targetUrl: candidate.targetUrl,
     reason: candidate.reason,
     confidence: candidate.confidence,
     createdAt: new Date().toISOString(),
@@ -96,6 +98,7 @@ function isStoredCodeLinkDecision(value: unknown): value is StoredCodeLinkDecisi
     typeof candidate.paragraphLabel === 'string' &&
     typeof candidate.symbol === 'string' &&
     typeof candidate.path === 'string' &&
+    (candidate.targetUrl === undefined || typeof candidate.targetUrl === 'string') &&
     typeof candidate.reason === 'string' &&
     typeof candidate.confidence === 'string' &&
     typeof candidate.createdAt === 'string'

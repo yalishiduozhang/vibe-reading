@@ -929,6 +929,40 @@ AI 任务拆分为：
 - 继续深化 GitHub 远程索引：artifact 排序、文件跳转和第二样本回归
 - 把 Code Link 从“候选展示”继续推进到“更明确的代码目标跳转 + 代码侧回链”
 
+
+### 2026-03-25 17:00 / Phase 5 management pass + Code Link target pass
+
+#### 已完成
+
+- 为 idea 数据补上论文名元信息，开始支持按 paper 维度过滤
+- Idea Workspace 新增 search、paper、tag、time 四类过滤控件
+- Idea 列表新增编辑、删除、复制与筛选后的可见计数
+- Composer 新增本地 draft 持久化，刷新后可按选集和模式恢复已编辑草稿
+- 新增 `src/features/idea-workspace/storage.ts`，把 idea / composer 的本地存储逻辑从页面层下沉
+- Code candidate 与 confirmation memory 开始保存明确的 `targetUrl`
+- Code 面板中的候选、确认结果、repo file 预览都已可直接打开对应 GitHub 目标
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M5` 又向前推进了一步：Idea Workspace 已不再只是“记录 + 预览”，而是开始具备管理、恢复和导出前整理能力
+- `M4` 也有收敛：当前 prototype 已从“看路径字符串”提升为“能直接打开明确代码目标”
+- 这一轮之后，`plan.md` 中原先关于 Composer 是否进入本地持久化的问题可以视为已回答
+- 当前更核心的剩余缺口已经变成：代码侧回链展示、候选排序质量、以及多草稿/多文档管理
+
+#### 遇到的问题
+
+- 代码联动当前仍以 file-level deep link 为主，距离更明确的 symbol-level 跳转还有差距
+- Idea 工作台虽然已有筛选和编辑，但仍缺更完整的草稿列表、命名与多 draft 管理
+- 现有本地存储仍是 browser localStorage 级别，尚未进入更稳定的 local-first 数据层
+
+#### 下一步
+
+- 继续推进 `M4`：补强 artifact 排序、第二样本回归和代码侧回链展示
+- 继续推进 `M5`：从“单草稿可恢复”走向“多草稿可管理”
+- 评估是否开始为本地持久化引入更明确的数据层边界（例如独立 store / SQLite 前置设计）
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1081,6 +1115,15 @@ AI 任务拆分为：
 - 这样能先把 `M5` 的主要验收缺口从“只有预览”缩小到“可编辑、可导出”的原型状态。
 - 在 AI 扩展、导出层和 draft 持久化规则都未冻结前，继续留在 Workspace 内更利于快速迭代。
 
+### D-017（2026-03-25）
+
+决定：Idea Workspace 第二轮继续采用 Local-first 的 `idea list + single active draft` 策略，并先把筛选、编辑和恢复做扎实。
+
+原因：
+
+- 在 `M5` 尚未通过前，优先做“能管理、能恢复、能继续写”比过早引入复杂多文档系统更稳妥。
+- 这条路径可以先验证真实使用中的管理动作，再决定是否拆成独立 draft 列表和更重的数据层。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
@@ -1090,7 +1133,7 @@ AI 任务拆分为：
 3. 第一版图表解释是否进 Phase 6，还是提前做一个轻量版？
 4. 桌面壳何时介入，是否在 Web 原型稳定后再评估？
 5. Web-first 原型里，本地仓库读取是先通过后端桥接，还是先以 GitHub URL 演示为主？
-6. Composer 的编辑结果是先保持会话级，还是进入本地持久化草稿管理？
+6. Idea Workspace 是否继续维持“单活跃 draft”，还是开始引入多 draft 列表与命名管理？
 
 ## 17. 审批后的固定规则
 
@@ -1105,10 +1148,10 @@ AI 任务拆分为：
 
 接下来应按以下顺序继续：
 
-1. 深化 Composer：补上草稿编辑、模式切换后的 section 结构优化，以及后续 Markdown 导出接口。
-2. 继续深化 GitHub 远程索引：补强 artifact 排序、文件跳转与缓存策略。
-3. 继续补强 Idea Workspace：加入筛选、编辑/删除与 draft 持久化边界设计。
-4. 评估是否把 repo index / confirmation memory / composer selection 抽成独立 store，继续推进 WP-H。
+1. 继续深化 GitHub 远程索引：补强 artifact 排序、文件跳转与缓存策略。
+2. 把 Code Link 从“可打开代码目标”继续推进到“代码侧回链展示”。
+3. 继续补强 Idea Workspace：从单草稿恢复推进到多草稿管理、命名与更明确的持久化边界。
+4. 评估是否把 repo index / confirmation memory / composer selection / idea storage 继续抽成独立 store，推进 WP-H。
 5. 评估是否需要把主样本之外的 LoRA / CLIP 作为回归样本加入验证。
 6. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
 
