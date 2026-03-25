@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 17:46 (Asia/Shanghai)  
+最后更新：2026-03-25 17:52 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1146,6 +1146,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否为 indexed repo preview 增加更明确的 snippet / symbol cache
 - 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
 
+
+### 2026-03-25 17:52 / Phase 4 sample indexing pass
+
+#### 已完成
+
+- `Cross-sample Regression` 新增 `Warm Sample Indexes / Refresh Sample Indexes`
+- demo sample 的真实 GitHub index 现在可以显式预热并写入现有 repo index cache，而不是只服务当前 repo source
+- 回归视图开始复用已缓存的 sample index，因此 LoRA / CLIP 一旦预热成功，也能进入 indexed candidate 路径
+- 回归面板开始显示当前已有多少 preset 处于 indexed 状态
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里原先“LoRA / CLIP 真实远程索引链路”已经不再只是待评估项，而是有了第一版可执行入口
+- 当前 cross-sample regression 已经从“同一段落看多个 preset fallback”推进到“可逐步转成多个真实 repo artifact 对照”
+- 这一步保持了当前 Web-first prototype 的交互原则：索引动作是显式触发的，不是后台隐式抓取
+
+#### 遇到的问题
+
+- sample index 预热目前仍是手动动作，不会自动保持新鲜度
+- 回归面板还没有显示每个 sample 的索引失败原因，只给出整体状态摘要
+- 当前索引缓存仍完全驻留在内存 ref 中，刷新页面后不会保留
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否为 sample index cache 增加更明确的持久化边界
+- 继续推进 `M4`：补更直接的 indexed snippet / symbol cache 组织方式
+- 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1360,6 +1390,15 @@ AI 任务拆分为：
 
 - 当前更重要的是让候选映射具备“就地可验证”的最小源码证据，而不是立刻承担完整代码浏览职责。
 - 这条路径可以直接复用现有 indexed key files 数据，并同时服务 active candidate、confirmation memory 和 code backlink。
+
+### D-024（2026-03-25）
+
+决定：LoRA / CLIP 的真实索引链路先以 `Cross-sample Regression` 内的手动 warm-up 方式接入，而不是默认自动拉取所有 demo repo。
+
+原因：
+
+- 这样能把多 sample 真实索引带进工作区，同时保持当前原型对网络动作的显式控制。
+- 在索引缓存和失败恢复策略还没成熟前，手动 warm-up 比隐式后台抓取更稳妥。
 
 ## 16. 当前开放问题
 

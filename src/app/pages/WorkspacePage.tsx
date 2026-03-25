@@ -116,9 +116,12 @@ export default function WorkspacePage() {
   const [editingSnapshotName, setEditingSnapshotName] = useState('')
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
+  const [sampleRegressionIndexVersion, setSampleRegressionIndexVersion] = useState(0)
+  const [sampleRegressionIndexStatus, setSampleRegressionIndexStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isIndexingRepo, setIsIndexingRepo] = useState(false)
+  const [isIndexingSampleRegression, setIsIndexingSampleRegression] = useState(false)
   const restoredComposerSelectionKeyRef = useRef(loadStoredComposerDraft()?.selectionKey ?? '')
   const pendingSnapshotLoadRef = useRef<StoredComposerSnapshot | null>(null)
 
@@ -263,6 +266,12 @@ export default function WorkspacePage() {
   const matchedDemoSample =
     matchDemoSampleBySource(repoAnalysis.normalizedSource || repoSource) ?? selectedDemoSample
   const effectiveRepoSource = repoAnalysis.normalizedSource || repoSource.trim() || matchedDemoSample.repoUrl
+  const sampleRegressionRepoIndexes = buildSampleRegressionRepoIndexes(
+    matchedDemoSample,
+    repoIndex,
+    repoIndexCacheRef.current,
+    sampleRegressionIndexVersion,
+  )
   const codeCandidates = buildCodeCandidates(
     selectedParagraph,
     effectiveRepoSource,
@@ -290,9 +299,9 @@ export default function WorkspacePage() {
   const codeBacklinkGroups = buildCodeBacklinkGroups(repoConfirmedDecisions)
   const sampleRegressionPreviews = buildSampleRegressionPreviews(
     selectedParagraph,
-    matchedDemoSample,
-    repoIndex,
+    sampleRegressionRepoIndexes,
   )
+  const sampleRegressionIndexedCount = sampleRegressionPreviews.filter((preview) => preview.usesIndexedRepo).length
   const paragraphRejectedCount = selectedParagraph
     ? codeLinkDecisions.filter(
         (decision) =>
@@ -491,6 +500,50 @@ export default function WorkspacePage() {
     } finally {
       setIsIndexingRepo(false)
     }
+  }
+
+  async function handleWarmSampleRegressionIndexes(forceRefresh = false) {
+    setIsIndexingSampleRegression(true)
+    setSampleRegressionIndexStatus(null)
+
+    let indexedCount = 0
+    let reusedCount = 0
+    const failedSamples: string[] = []
+
+    for (const sample of demoSamples) {
+      const cachedIndex = repoIndexCacheRef.current[sample.repoUrl]
+      if (!forceRefresh && cachedIndex) {
+        reusedCount += 1
+        continue
+      }
+
+      try {
+        const nextIndex = await fetchGitHubRepoIndex(sample.repoUrl)
+        repoIndexCacheRef.current[sample.repoUrl] = nextIndex
+        indexedCount += 1
+
+        if (sample.id === matchedDemoSample.id && effectiveRepoSource === sample.repoUrl) {
+          setRepoIndex(nextIndex)
+          setRepoIndexError(null)
+        }
+      } catch {
+        failedSamples.push(sample.label)
+      }
+    }
+
+    setSampleRegressionIndexVersion((version) => version + 1)
+
+    if (failedSamples.length) {
+      setSampleRegressionIndexStatus(
+        `Indexed ${indexedCount} sample repos, reused ${reusedCount}, failed: ${failedSamples.join(', ')}.`,
+      )
+    } else if (indexedCount || reusedCount) {
+      setSampleRegressionIndexStatus(`Indexed ${indexedCount} sample repos and reused ${reusedCount} cached indexes.`)
+    } else {
+      setSampleRegressionIndexStatus('No sample indexes were updated.')
+    }
+
+    setIsIndexingSampleRegression(false)
   }
 
   function handlePreviousPage() {
@@ -1304,8 +1357,34 @@ export default function WorkspacePage() {
               <section className="context-card-block repo-analysis-block">
                 <div className="context-block-head">
                   <h3>Cross-sample Regression</h3>
-                  <span>{sampleRegressionPreviews.length} presets</span>
+                  <span>{sampleRegressionIndexedCount}/{sampleRegressionPreviews.length} indexed</span>
                 </div>
+                <div className="candidate-actions">
+                  <button
+                    className="ghost-button ghost-button-small"
+                    disabled={isIndexingSampleRegression}
+                    onClick={() => void handleWarmSampleRegressionIndexes(false)}
+                    type="button"
+                  >
+                    {isIndexingSampleRegression ? 'Warming...' : 'Warm Sample Indexes'}
+                  </button>
+                  <button
+                    className="ghost-button ghost-button-small"
+                    disabled={isIndexingSampleRegression}
+                    onClick={() => void handleWarmSampleRegressionIndexes(true)}
+                    type="button"
+                  >
+                    Refresh Sample Indexes
+                  </button>
+                </div>
+                {sampleRegressionIndexStatus ? (
+                  <p className="repo-analysis-note">{sampleRegressionIndexStatus}</p>
+                ) : (
+                  <p className="repo-analysis-note">
+                    Warm the demo sample indexes to compare the current paragraph
+                    against real LoRA / CLIP repo artifacts instead of only preset fallbacks.
+                  </p>
+                )}
                 {selectedParagraph ? (
                   <div className="saved-mapping-list">
                     {sampleRegressionPreviews.map((preview) => (
@@ -2236,22 +2315,46 @@ function deriveSnapshotIdeaTags(ideas: StoredIdea[]): IdeaTag[] {
   return ideaTags.filter((tag) => tags.includes(tag))
 }
 
+function buildSampleRegressionRepoIndexes(
+  matchedDemoSample: DemoSample,
+  activeRepoIndex: GitHubRepoIndex | null,
+  repoIndexCache: Record<string, GitHubRepoIndex>,
+  _version: number,
+): Partial<Record<DemoSampleId, GitHubRepoIndex>> {
+  void _version
+  const indexes: Partial<Record<DemoSampleId, GitHubRepoIndex>> = {}
+
+  for (const sample of demoSamples) {
+    if (sample.id === matchedDemoSample.id && activeRepoIndex) {
+      indexes[sample.id] = activeRepoIndex
+      continue
+    }
+
+    const cachedIndex = repoIndexCache[sample.repoUrl]
+    if (cachedIndex) {
+      indexes[sample.id] = cachedIndex
+    }
+  }
+
+  return indexes
+}
+
 function buildSampleRegressionPreviews(
   paragraph: ReaderParagraph | null,
-  matchedDemoSample: DemoSample,
-  repoIndex: GitHubRepoIndex | null,
+  sampleRepoIndexes: Partial<Record<DemoSampleId, GitHubRepoIndex>>,
 ): SampleRegressionPreview[] {
   if (!paragraph) {
     return []
   }
 
   return demoSamples.map((sample) => {
-    const usesIndexedRepo = sample.id === matchedDemoSample.id && repoIndex !== null
+    const sampleRepoIndex = sampleRepoIndexes[sample.id] ?? null
+    const usesIndexedRepo = sampleRepoIndex !== null
     const candidates = buildCodeCandidates(
       paragraph,
       sample.repoUrl,
       sample,
-      usesIndexedRepo ? repoIndex : null,
+      sampleRepoIndex,
     )
 
     return {
