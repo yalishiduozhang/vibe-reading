@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 18:49 (Asia/Shanghai)  
+最后更新：2026-03-25 18:53 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1294,6 +1294,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否把 regression diagnostics 做成更明确的错误类型与刷新建议
 - 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
 
+
+### 2026-03-25 18:53 / Phase 5 snapshot archive pass
+
+#### 已完成
+
+- 为 snapshot 数据补上 `note` 与 `archivedAt`，开始支持更像正式 draft 实体的元信息
+- Snapshot 保存时现在可以同步写入备注，后续也支持在列表内编辑元信息
+- Saved Draft Snapshots 新增 `Visibility` 过滤，可在 `All / Active only / Archived only` 间切换
+- snapshot 卡片开始支持 `Archive / Restore`，并显示归档时间与备注
+- 继续完成 `npm run build`
+- 继续完成 `npm run lint`
+
+#### 当前判断
+
+- `M5` 已经不再只是“多 snapshot 可保存与筛选”，而是开始具备更明确的生命周期动作
+- 当前 snapshot 虽然还不是完整文档实体，但已经有了备注、归档、恢复这些更接近 draft library 的组织行为
+- 这一步继续符合当前 Local-first 策略，没有过早引入更重的文档列表系统
+
+#### 遇到的问题
+
+- snapshot 仍没有独立详情页或更强的文档级浏览结构
+- 当前备注仍是轻量文本，没有更细的标签或状态体系
+- archive 目前只是本地软归档，不涉及更深的存储分层
+
+#### 下一步
+
+- 继续推进 `M5`：评估是否把 snapshot 再向正式 draft 实体推进，例如更稳定的详情视图或实体级操作
+- 继续推进 `M4`：评估是否把 symbol cache 进一步并入 repo index 的持久化结构
+- 继续推进 `M4`：评估是否把 regression diagnostics 做成更明确的错误类型与刷新建议
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1553,6 +1583,15 @@ AI 任务拆分为：
 
 - 当前更需要的是让失败路径“能看见、能继续操作”，而不是把诊断界面做成新的复杂子系统。
 - 这种轻量诊断已经足够覆盖当前 warm sample indexes 的主要交互需求，并能继续低成本迭代。
+
+### D-029（2026-03-25）
+
+决定：在是否升级为正式 draft 实体尚未定案前，snapshot 先补 `note + archive/restore + visibility filter` 这类轻量生命周期动作。
+
+原因：
+
+- 这样可以继续收敛 `M5` 的组织能力，而不需要立刻引入新的文档层级和页面结构。
+- 这条路径与当前 Local-first snapshot 模型兼容，能更低成本地验证真实使用中的管理动作。
 
 ## 16. 当前开放问题
 

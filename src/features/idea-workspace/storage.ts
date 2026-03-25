@@ -23,6 +23,8 @@ export type StoredComposerSnapshot = {
   updatedAt: string
   documentName?: string
   ideaTags?: IdeaTag[]
+  note?: string
+  archivedAt?: string
 }
 
 export function loadStoredIdeas(): StoredIdea[] {
@@ -174,6 +176,8 @@ function isStoredComposerSnapshot(value: unknown): value is StoredComposerSnapsh
     typeof candidate.markdown === 'string' &&
     typeof candidate.updatedAt === 'string' &&
     (candidate.documentName === undefined || typeof candidate.documentName === 'string') &&
+    (candidate.note === undefined || typeof candidate.note === 'string') &&
+    (candidate.archivedAt === undefined || typeof candidate.archivedAt === 'string') &&
     (candidate.ideaTags === undefined ||
       (Array.isArray(candidate.ideaTags) && candidate.ideaTags.every((tag) => typeof tag === 'string')))
   )

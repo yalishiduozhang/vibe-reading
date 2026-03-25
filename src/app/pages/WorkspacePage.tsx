@@ -66,11 +66,13 @@ const repoStorageKey = 'openviberead.repo-source.v1'
 const allPapersFilterLabel = 'All papers'
 const allSnapshotPapersFilterLabel = 'All snapshot papers'
 const allTagsFilterLabel = 'All tags'
+const snapshotVisibilityFilters = ['All snapshots', 'Active only', 'Archived only'] as const
 const timeFilters = ['All time', 'Last 24h', 'Last 7d'] as const
 
 type AssistTab = 'context' | 'code'
 type IdeaTagFilter = IdeaTag | typeof allTagsFilterLabel
 type IdeaTimeFilter = (typeof timeFilters)[number]
+type SnapshotVisibilityFilter = (typeof snapshotVisibilityFilters)[number]
 type RepoIndexSource = 'none' | 'cache' | 'network'
 type SampleRegressionDiagnostic = {
   status: 'cached' | 'refreshed' | 'failed'
@@ -120,13 +122,17 @@ export default function WorkspacePage() {
   const [composerMarkdown, setComposerMarkdown] = useState(() => loadStoredComposerDraft()?.markdown ?? '')
   const [composerStatus, setComposerStatus] = useState<string | null>(null)
   const [composerSnapshotName, setComposerSnapshotName] = useState('')
+  const [composerSnapshotNote, setComposerSnapshotNote] = useState('')
   const [composerSnapshots, setComposerSnapshots] = useState<StoredComposerSnapshot[]>(() =>
     loadStoredComposerSnapshots(),
   )
   const [snapshotSearchQuery, setSnapshotSearchQuery] = useState('')
   const [snapshotDocumentFilter, setSnapshotDocumentFilter] = useState(allSnapshotPapersFilterLabel)
+  const [snapshotVisibilityFilter, setSnapshotVisibilityFilter] =
+    useState<SnapshotVisibilityFilter>('All snapshots')
   const [editingSnapshotId, setEditingSnapshotId] = useState('')
   const [editingSnapshotName, setEditingSnapshotName] = useState('')
+  const [editingSnapshotNote, setEditingSnapshotNote] = useState('')
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
   const [repoIndexSource, setRepoIndexSource] = useState<RepoIndexSource>('none')
@@ -358,6 +364,8 @@ export default function WorkspacePage() {
   const snapshotDocuments = Array.from(
     new Set(composerSnapshots.map((snapshot) => getSnapshotDocumentName(snapshot))),
   ).sort((left, right) => left.localeCompare(right))
+  const activeSnapshotCount = composerSnapshots.filter((snapshot) => !snapshot.archivedAt).length
+  const archivedSnapshotCount = composerSnapshots.filter((snapshot) => Boolean(snapshot.archivedAt)).length
   const filteredComposerSnapshots = composerSnapshots
     .filter((snapshot) => matchesSnapshotSearch(snapshot, snapshotSearchQuery))
     .filter(
@@ -365,10 +373,11 @@ export default function WorkspacePage() {
         snapshotDocumentFilter === allSnapshotPapersFilterLabel ||
         getSnapshotDocumentName(snapshot) === snapshotDocumentFilter,
     )
+    .filter((snapshot) => matchesSnapshotVisibility(snapshot, snapshotVisibilityFilter))
     .sort((left, right) => {
       const leftTime = new Date(left.updatedAt).getTime()
       const rightTime = new Date(right.updatedAt).getTime()
-      return rightTime - leftTime
+      return Number(Boolean(left.archivedAt)) - Number(Boolean(right.archivedAt)) || rightTime - leftTime
     })
   const pageStatus = documentProxy ? `Page ${currentPage} / ${documentProxy.numPages}` : 'No PDF loaded'
   const isRenderingPage =
@@ -850,6 +859,7 @@ export default function WorkspacePage() {
     }
 
     const snapshotName = composerSnapshotName.trim() || ideaDraft.title
+    const snapshotNote = composerSnapshotNote.trim()
     const updatedAt = new Date().toISOString()
     const documentName = deriveSnapshotDocumentName(selectedIdeas)
     const ideaTags = deriveSnapshotIdeaTags(selectedIdeas)
@@ -869,6 +879,7 @@ export default function WorkspacePage() {
             updatedAt,
             documentName,
             ideaTags,
+            note: snapshotNote || undefined,
           },
           ...currentSnapshots.filter((snapshot) => snapshot.id !== existingSnapshot.id),
         ]
@@ -885,6 +896,7 @@ export default function WorkspacePage() {
           updatedAt,
           documentName,
           ideaTags,
+          note: snapshotNote || undefined,
         },
         ...currentSnapshots,
       ]
@@ -894,6 +906,7 @@ export default function WorkspacePage() {
 
   function handleLoadComposerSnapshot(snapshot: StoredComposerSnapshot) {
     setComposerSnapshotName(snapshot.name)
+    setComposerSnapshotNote(snapshot.note ?? '')
 
     if (snapshot.selectionKey === composerSelectionKey) {
       setComposerMarkdown(snapshot.markdown)
@@ -911,6 +924,7 @@ export default function WorkspacePage() {
     if (editingSnapshotId === snapshotId) {
       setEditingSnapshotId('')
       setEditingSnapshotName('')
+      setEditingSnapshotNote('')
     }
 
     setComposerSnapshots((currentSnapshots) =>
@@ -922,11 +936,13 @@ export default function WorkspacePage() {
   function handleStartComposerSnapshotRename(snapshot: StoredComposerSnapshot) {
     setEditingSnapshotId(snapshot.id)
     setEditingSnapshotName(snapshot.name)
+    setEditingSnapshotNote(snapshot.note ?? '')
   }
 
   function handleCancelComposerSnapshotRename() {
     setEditingSnapshotId('')
     setEditingSnapshotName('')
+    setEditingSnapshotNote('')
   }
 
   function handleSaveComposerSnapshotRename(snapshot: StoredComposerSnapshot) {
@@ -959,6 +975,7 @@ export default function WorkspacePage() {
         {
           ...targetSnapshot,
           name: nextName,
+          note: editingSnapshotNote.trim() || undefined,
           updatedAt,
         },
         ...currentSnapshots.filter((currentSnapshot) => currentSnapshot.id !== snapshot.id),
@@ -967,7 +984,32 @@ export default function WorkspacePage() {
     setComposerSnapshotName(nextName)
     setEditingSnapshotId('')
     setEditingSnapshotName('')
+    setEditingSnapshotNote('')
     setComposerStatus(`Renamed snapshot to "${nextName}".`)
+  }
+
+  function handleToggleComposerSnapshotArchive(snapshotId: string) {
+    const updatedAt = new Date().toISOString()
+    const targetSnapshot = composerSnapshots.find((snapshot) => snapshot.id === snapshotId)
+    const nextIsArchived = !targetSnapshot?.archivedAt
+
+    setComposerSnapshots((currentSnapshots) =>
+      currentSnapshots.map((snapshot) =>
+        snapshot.id === snapshotId
+          ? {
+              ...snapshot,
+              archivedAt: snapshot.archivedAt ? undefined : updatedAt,
+              updatedAt,
+            }
+          : snapshot,
+      ),
+    )
+
+    if (!targetSnapshot) {
+      return
+    }
+
+    setComposerStatus(nextIsArchived ? 'Snapshot archived.' : 'Snapshot restored.')
   }
 
   function hydrateCachedSnapshot(
@@ -2006,6 +2048,17 @@ export default function WorkspacePage() {
                 Save Snapshot
               </button>
             </div>
+            <label className="control-group control-group-wide">
+              <span>Snapshot Note</span>
+              <textarea
+                className="composer-editor composer-editor-compact"
+                rows={3}
+                placeholder="What is different about this draft version?"
+                spellCheck={false}
+                value={composerSnapshotNote}
+                onChange={(event) => setComposerSnapshotNote(event.target.value)}
+              />
+            </label>
             {selectedIdeas.length ? (
               <article className="context-card-block composer-card">
                 <div className="context-block-head">
@@ -2066,7 +2119,7 @@ export default function WorkspacePage() {
               <div className="context-block-head">
                 <h3>Saved Draft Snapshots</h3>
                 <span>
-                  {filteredComposerSnapshots.length} / {composerSnapshots.length} visible
+                  {`${filteredComposerSnapshots.length} / ${composerSnapshots.length} visible · ${activeSnapshotCount} active · ${archivedSnapshotCount} archived`}
                 </span>
               </div>
               {composerSnapshots.length ? (
@@ -2093,6 +2146,21 @@ export default function WorkspacePage() {
                       ))}
                     </select>
                   </label>
+                  <label className="control-group">
+                    <span>Visibility</span>
+                    <select
+                      value={snapshotVisibilityFilter}
+                      onChange={(event) =>
+                        setSnapshotVisibilityFilter(event.target.value as SnapshotVisibilityFilter)
+                      }
+                    >
+                      {snapshotVisibilityFilters.map((filterLabel) => (
+                        <option key={filterLabel} value={filterLabel}>
+                          {filterLabel}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 </div>
               ) : null}
               {composerSnapshots.length ? (
@@ -2102,7 +2170,7 @@ export default function WorkspacePage() {
                     <article key={snapshot.id} className="candidate-card candidate-card-compact">
                       <div className="candidate-head">
                         <strong>{snapshot.name}</strong>
-                        <span>{snapshot.draftMode}</span>
+                        <span>{snapshot.archivedAt ? 'Archived' : snapshot.draftMode}</span>
                       </div>
                       <p className="candidate-path">
                         {getSnapshotDocumentName(snapshot)}
@@ -2110,6 +2178,12 @@ export default function WorkspacePage() {
                       <p>
                         {`${snapshot.selectedIdeaIds.length} ideas / ${getSnapshotTagSummary(snapshot)} / updated ${formatIdeaTime(snapshot.updatedAt)}`}
                       </p>
+                      {snapshot.note ? <p>{snapshot.note}</p> : null}
+                      {snapshot.archivedAt ? (
+                        <p className="repo-analysis-note">
+                          {`Archived ${formatIdeaTime(snapshot.archivedAt)}`}
+                        </p>
+                      ) : null}
                       {editingSnapshotId === snapshot.id ? (
                         <>
                           <label className="control-group control-group-wide">
@@ -2117,6 +2191,16 @@ export default function WorkspacePage() {
                             <input
                               value={editingSnapshotName}
                               onChange={(event) => setEditingSnapshotName(event.target.value)}
+                            />
+                          </label>
+                          <label className="control-group control-group-wide">
+                            <span>Edit Note</span>
+                            <textarea
+                              className="composer-editor composer-editor-compact"
+                              rows={3}
+                              spellCheck={false}
+                              value={editingSnapshotNote}
+                              onChange={(event) => setEditingSnapshotNote(event.target.value)}
                             />
                           </label>
                           <div className="candidate-actions">
@@ -2150,7 +2234,14 @@ export default function WorkspacePage() {
                             onClick={() => handleStartComposerSnapshotRename(snapshot)}
                             type="button"
                           >
-                            Rename
+                            Edit Meta
+                          </button>
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleToggleComposerSnapshotArchive(snapshot.id)}
+                            type="button"
+                          >
+                            {snapshot.archivedAt ? 'Restore' : 'Archive'}
                           </button>
                           <button
                             className="ghost-button ghost-button-small"
@@ -2408,8 +2499,24 @@ function matchesSnapshotSearch(snapshot: StoredComposerSnapshot, rawQuery: strin
     snapshot.name,
     snapshot.draftMode,
     getSnapshotDocumentName(snapshot),
+    snapshot.note ?? '',
     ...(snapshot.ideaTags ?? []),
   ].some((field) => field.toLowerCase().includes(query))
+}
+
+function matchesSnapshotVisibility(
+  snapshot: StoredComposerSnapshot,
+  filterLabel: SnapshotVisibilityFilter,
+): boolean {
+  if (filterLabel === 'All snapshots') {
+    return true
+  }
+
+  if (filterLabel === 'Active only') {
+    return !snapshot.archivedAt
+  }
+
+  return Boolean(snapshot.archivedAt)
 }
 
 function matchesIdeaTimeFilter(idea: StoredIdea, filterLabel: IdeaTimeFilter): boolean {

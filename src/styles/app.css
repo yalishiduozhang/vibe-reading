@@ -805,6 +805,11 @@
   color: rgba(243, 239, 230, 0.82);
 }
 
+.composer-editor-compact {
+  min-height: 92px;
+  padding: 12px 14px;
+}
+
 .composer-editor:focus {
   outline: 2px solid rgba(217, 181, 109, 0.32);
   outline-offset: 2px;
