@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:28 (Asia/Shanghai)  
+最后更新：2026-03-25 19:31 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1622,6 +1622,36 @@ AI 任务拆分为：
 - 继续推进 `M5`：评估是否真的需要更重的 lineage/tree 视图
 - 继续推进 `M4`：继续收敛 repo cache helper 的边界
 
+
+### 2026-03-25 19:31 / WP-H snapshot helper extraction pass
+
+#### 已完成
+
+- 新增 `src/features/idea-workspace/snapshots.ts`
+- snapshot 的 `duplicate naming / relation signals / compare summary` helper 开始从 `WorkspacePage` 下沉回 `features/idea-workspace`
+- `WorkspacePage` 继续保留状态与交互接线，但不再承担这些纯数据推导 helper 的定义
+- 这让刚补出来的 snapshot entity 能力开始形成独立 feature 边界，而不是继续堆在页面底部
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `WP-H` 已经不再只是口头目标，snapshot 这条线开始有了真正的模块下沉动作
+- 当前页面层虽然仍然偏大，但至少新增长出来的 entity 逻辑没有继续全部留在页面里
+- 这一步对后续继续补 snapshot lineage / compare 或导出动作都有利，因为 feature 边界开始更清晰
+
+#### 遇到的问题
+
+- 当前下沉还只覆盖 snapshot helper，一部分列表过滤、编辑状态和交互动作仍在页面层
+- code-link 这条线也还有不少 cache/ranking helper 仍然留在页面里
+- 目前还没有把 snapshot action reducer/store 抽出来，只是先拆 helper
+
+#### 下一步
+
+- 继续推进 `WP-H`：评估是否把 snapshot action 和 list/detail 视图逻辑继续下沉
+- 继续推进 `M5`：评估是否真的需要更重的 lineage/tree 视图
+- 继续推进 `M4`：继续收敛 repo cache helper 的边界
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1980,6 +2010,15 @@ AI 任务拆分为：
 
 - 当前更需要的是让 duplicate 不再是匿名复制，并让用户能看懂“这个 snapshot 从哪来、又派生出了什么”。
 - 轻量父子关系已经足够验证 snapshot 是否真的需要更重的 lineage / tree / history 视图。
+
+### D-040（2026-03-25）
+
+决定：`WP-H` 的当前切入点先从 snapshot helper 下沉开始，而不是一上来就重写 `WorkspacePage` 成完整 store/reducer 结构。
+
+原因：
+
+- 当前更需要的是优先把最近增长最快的 snapshot entity 逻辑从页面里剥离出来，降低继续演化时的耦合。
+- 先拆 helper 比直接大改状态层更稳，可以在持续交付功能的同时逐步清理页面边界。
 
 ## 16. 当前开放问题
 
