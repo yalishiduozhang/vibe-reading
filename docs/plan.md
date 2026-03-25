@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 18:07 (Asia/Shanghai)  
+最后更新：2026-03-25 18:13 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1206,6 +1206,35 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否为 repo index cache 加入更可见的命中 / 过期状态
 - 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
 
+
+### 2026-03-25 18:13 / Phase 4 cache visibility pass
+
+#### 已完成
+
+- 当前 `Remote Repo Index` 会直接显示 cache hit / live refresh / fresh cache / stale cache 等状态信号
+- `Cross-sample Regression` 里的每个 sample 现在也会显示自身的 cache 状态，而不再只标 `Indexed / Preset`
+- 新增相对时间表达，当前缓存是否新鲜会直接体现在工作区里
+- 继续完成 `npm run build`
+- 继续完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里关于 cache 命中与过期状态的可见性已经开始收口，索引链路不再像黑盒
+- 当前 repo index 和 sample regression 的状态反馈已经更接近“可调试、可演示”的产品原型
+- 这一步补的是解释层，不改变当前 fetch 和 cache 的主逻辑，因此推进风险较低
+
+#### 遇到的问题
+
+- 当前 freshness 仍是简单时间阈值，不是更严格的缓存策略
+- 还没有提供显式的 per-sample 失败详情或过期刷新建议
+- 当前 cache 状态仍停留在 UI 信号层，没有更细的统计视图
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否把 indexed repo preview 再收敛成更明确的 symbol / snippet cache 组织方式
+- 继续推进 `M4`：评估是否给 sample regression 增加更直接的失败详情与刷新建议
+- 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1438,6 +1467,15 @@ AI 任务拆分为：
 
 - 当前更需要先把“跨刷新保留索引结果”这件事做通，再决定是否升级为更重的数据层。
 - 这条路径与现有 local-first prototype 一致，也能尽快服务当前 repo index 和 sample regression 两条链路。
+
+### D-026（2026-03-25）
+
+决定：repo index cache 的状态反馈先采用轻量信号与相对时间展示，而不是立即引入复杂的缓存面板。
+
+原因：
+
+- 当前更需要的是让索引链路“可见、可解释”，而不是把调试界面做重。
+- 轻量信号已经足够覆盖当前 repo index 与 cross-sample regression 两个主要使用点。
 
 ## 16. 当前开放问题
 

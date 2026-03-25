@@ -67,6 +67,7 @@ const timeFilters = ['All time', 'Last 24h', 'Last 7d'] as const
 type AssistTab = 'context' | 'code'
 type IdeaTagFilter = IdeaTag | typeof allTagsFilterLabel
 type IdeaTimeFilter = (typeof timeFilters)[number]
+type RepoIndexSource = 'none' | 'cache' | 'network'
 type PendingJump = {
   pageNumber: number
   paragraphId: string
@@ -120,6 +121,7 @@ export default function WorkspacePage() {
   const [editingSnapshotName, setEditingSnapshotName] = useState('')
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
+  const [repoIndexSource, setRepoIndexSource] = useState<RepoIndexSource>('none')
   const [repoIndexCacheVersion, setRepoIndexCacheVersion] = useState(0)
   const [sampleRegressionIndexStatus, setSampleRegressionIndexStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -280,6 +282,7 @@ export default function WorkspacePage() {
     repoIndexCacheRef.current,
     repoIndexCacheVersion,
   )
+  const repoIndexStatusSignals = repoIndex ? buildRepoIndexStatusSignals(repoIndex, repoIndexSource) : []
   const codeCandidates = buildCodeCandidates(
     selectedParagraph,
     effectiveRepoSource,
@@ -308,6 +311,8 @@ export default function WorkspacePage() {
   const sampleRegressionPreviews = buildSampleRegressionPreviews(
     selectedParagraph,
     sampleRegressionRepoIndexes,
+    matchedDemoSample,
+    repoIndexSource,
   )
   const sampleRegressionIndexedCount = sampleRegressionPreviews.filter((preview) => preview.usesIndexedRepo).length
   const paragraphRejectedCount = selectedParagraph
@@ -426,11 +431,14 @@ export default function WorkspacePage() {
     if (repoAnalysis.kind !== 'github') {
       setRepoIndex(null)
       setRepoIndexError(null)
+      setRepoIndexSource('none')
       return
     }
 
-    setRepoIndex(repoIndexCacheRef.current[effectiveRepoSource] ?? null)
+    const cachedIndex = repoIndexCacheRef.current[effectiveRepoSource] ?? null
+    setRepoIndex(cachedIndex)
     setRepoIndexError(null)
+    setRepoIndexSource(cachedIndex ? 'cache' : 'none')
   }, [effectiveRepoSource, repoAnalysis.kind])
 
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
@@ -497,6 +505,7 @@ export default function WorkspacePage() {
       if (cachedIndex) {
         setRepoIndex(cachedIndex)
         setRepoIndexError(null)
+        setRepoIndexSource('cache')
         return
       }
     }
@@ -508,6 +517,7 @@ export default function WorkspacePage() {
       const nextIndex = await fetchGitHubRepoIndex(effectiveRepoSource)
       cacheRepoIndex(nextIndex)
       setRepoIndex(nextIndex)
+      setRepoIndexSource('network')
     } catch (indexError: unknown) {
       setRepoIndexError(getErrorMessage(indexError, 'Failed to index this GitHub repository.'))
     } finally {
@@ -538,6 +548,7 @@ export default function WorkspacePage() {
         if (sample.id === matchedDemoSample.id && effectiveRepoSource === sample.repoUrl) {
           setRepoIndex(nextIndex)
           setRepoIndexError(null)
+          setRepoIndexSource('network')
         }
       } catch {
         failedSamples.push(sample.label)
@@ -1318,6 +1329,15 @@ export default function WorkspacePage() {
                         <p className="repo-analysis-note">
                           {`Indexed ${repoIndex.scannedDirectories.length} directories and ${repoIndex.keyFiles.length} key files at ${formatIdeaTime(repoIndex.generatedAt)}.`}
                         </p>
+                        {repoIndexStatusSignals.length ? (
+                          <div className="repo-signal-list">
+                            {repoIndexStatusSignals.map((signal) => (
+                              <span key={signal} className="repo-signal-item">
+                                {signal}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <div className="repo-signal-list">
                           {repoIndex.rootEntries
                             .filter((entry) => entry.type === 'dir')
@@ -1404,6 +1424,15 @@ export default function WorkspacePage() {
                           <strong>{preview.sample.label}</strong>
                           <span>{preview.usesIndexedRepo ? 'Indexed' : 'Preset'}</span>
                         </div>
+                        {preview.cacheSignals.length ? (
+                          <div className="repo-signal-list">
+                            {preview.cacheSignals.map((signal) => (
+                              <span key={`${preview.sample.id}-${signal}`} className="repo-signal-item">
+                                {signal}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
                         <p className="candidate-path">
                           {preview.focusMatchCount
                             ? `${preview.focusMatchCount} mapping-focus hits`
@@ -2106,6 +2135,7 @@ type SampleRegressionPreview = {
   topCandidate: CodeCandidate | null
   candidateCount: number
   usesIndexedRepo: boolean
+  cacheSignals: string[]
 }
 
 function ContextFieldBlock({ attribution, body, title }: ContextFieldBlockProps) {
@@ -2209,6 +2239,31 @@ function formatIdeaTime(value: string): string {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function formatRelativeTime(value: string): string {
+  const timestamp = new Date(value).getTime()
+  if (Number.isNaN(timestamp)) {
+    return 'unknown time'
+  }
+
+  const elapsedMs = Date.now() - timestamp
+  if (elapsedMs < 60_000) {
+    return 'just now'
+  }
+
+  const elapsedMinutes = Math.floor(elapsedMs / 60_000)
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m ago`
+  }
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60)
+  if (elapsedHours < 24) {
+    return `${elapsedHours}h ago`
+  }
+
+  const elapsedDays = Math.floor(elapsedHours / 24)
+  return `${elapsedDays}d ago`
 }
 
 function formatCodeTargetPath(path: string, lineNumber?: number): string {
@@ -2326,6 +2381,20 @@ function deriveSnapshotIdeaTags(ideas: StoredIdea[]): IdeaTag[] {
   return ideaTags.filter((tag) => tags.includes(tag))
 }
 
+function buildRepoIndexStatusSignals(index: GitHubRepoIndex, source: RepoIndexSource): string[] {
+  const generatedAt = new Date(index.generatedAt).getTime()
+  const elapsedMs = Date.now() - generatedAt
+  const freshness =
+    Number.isNaN(generatedAt) || elapsedMs >= 24 * 60 * 60 * 1000
+      ? 'stale cache'
+      : elapsedMs >= 60 * 60 * 1000
+        ? 'recent cache'
+        : 'fresh cache'
+  const sourceLabel = source === 'network' ? 'live refresh' : 'cache hit'
+
+  return [sourceLabel, freshness, `updated ${formatRelativeTime(index.generatedAt)}`]
+}
+
 function buildSampleRegressionRepoIndexes(
   matchedDemoSample: DemoSample,
   activeRepoIndex: GitHubRepoIndex | null,
@@ -2353,6 +2422,8 @@ function buildSampleRegressionRepoIndexes(
 function buildSampleRegressionPreviews(
   paragraph: ReaderParagraph | null,
   sampleRepoIndexes: Partial<Record<DemoSampleId, GitHubRepoIndex>>,
+  matchedDemoSample: DemoSample,
+  activeRepoIndexSource: RepoIndexSource,
 ): SampleRegressionPreview[] {
   if (!paragraph) {
     return []
@@ -2374,6 +2445,12 @@ function buildSampleRegressionPreviews(
       topCandidate: candidates[0] ?? null,
       candidateCount: candidates.length,
       usesIndexedRepo,
+      cacheSignals: sampleRepoIndex
+        ? buildRepoIndexStatusSignals(
+            sampleRepoIndex,
+            sample.id === matchedDemoSample.id ? activeRepoIndexSource : 'cache',
+          )
+        : ['preset fallback'],
     }
   })
 }
