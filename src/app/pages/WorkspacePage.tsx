@@ -31,9 +31,12 @@ import {
 import {
   clearStoredComposerDraft,
   loadStoredComposerDraft,
+  loadStoredComposerSnapshots,
   loadStoredIdeas,
   saveStoredComposerDraft,
+  saveStoredComposerSnapshots,
   saveStoredIdeas,
+  type StoredComposerSnapshot,
 } from '../../features/idea-workspace/storage'
 import { analyzeRepoSource } from '../../features/code-link/source'
 import { buildContextCard, formatEvidenceRef } from '../../features/reader/context'
@@ -101,12 +104,17 @@ export default function WorkspacePage() {
   const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>(() => loadStoredComposerDraft()?.selectedIdeaIds ?? [])
   const [composerMarkdown, setComposerMarkdown] = useState(() => loadStoredComposerDraft()?.markdown ?? '')
   const [composerStatus, setComposerStatus] = useState<string | null>(null)
+  const [composerSnapshotName, setComposerSnapshotName] = useState('')
+  const [composerSnapshots, setComposerSnapshots] = useState<StoredComposerSnapshot[]>(() =>
+    loadStoredComposerSnapshots(),
+  )
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isIndexingRepo, setIsIndexingRepo] = useState(false)
   const restoredComposerSelectionKeyRef = useRef(loadStoredComposerDraft()?.selectionKey ?? '')
+  const pendingSnapshotLoadRef = useRef<StoredComposerSnapshot | null>(null)
 
   useEffect(() => {
     let isActive = true
@@ -223,6 +231,10 @@ export default function WorkspacePage() {
   }, [ideas])
 
   useEffect(() => {
+    saveStoredComposerSnapshots(composerSnapshots)
+  }, [composerSnapshots])
+
+  useEffect(() => {
     window.localStorage.setItem(repoStorageKey, repoSource)
   }, [repoSource])
 
@@ -269,6 +281,7 @@ export default function WorkspacePage() {
   const repoConfirmedDecisions = codeLinkDecisions.filter(
     (decision) => decision.repoSource === effectiveRepoSource && decision.decision === 'confirmed',
   )
+  const codeBacklinkGroups = buildCodeBacklinkGroups(repoConfirmedDecisions)
   const paragraphRejectedCount = selectedParagraph
     ? codeLinkDecisions.filter(
         (decision) =>
@@ -310,6 +323,7 @@ export default function WorkspacePage() {
 
   useEffect(() => {
     if (!selectedIdeas.length) {
+      pendingSnapshotLoadRef.current = null
       restoredComposerSelectionKeyRef.current = composerSelectionKey
       setComposerMarkdown('')
       setComposerStatus(null)
@@ -317,6 +331,15 @@ export default function WorkspacePage() {
     }
 
     if (restoredComposerSelectionKeyRef.current === composerSelectionKey) {
+      return
+    }
+
+    const pendingSnapshot = pendingSnapshotLoadRef.current
+    if (pendingSnapshot && pendingSnapshot.selectionKey === composerSelectionKey) {
+      setComposerMarkdown(pendingSnapshot.markdown)
+      setComposerStatus(`Loaded snapshot "${pendingSnapshot.name}".`)
+      restoredComposerSelectionKeyRef.current = composerSelectionKey
+      pendingSnapshotLoadRef.current = null
       return
     }
 
@@ -681,6 +704,70 @@ export default function WorkspacePage() {
   function handleResetComposerDraft() {
     setComposerMarkdown(ideaDraft.markdown)
     setComposerStatus('Draft reset to the generated baseline.')
+  }
+
+  function handleSaveComposerSnapshot() {
+    if (!selectedIdeaIds.length || !composerMarkdown.trim()) {
+      return
+    }
+
+    const snapshotName = composerSnapshotName.trim() || ideaDraft.title
+    const updatedAt = new Date().toISOString()
+
+    setComposerSnapshots((currentSnapshots) => {
+      const existingSnapshot = currentSnapshots.find(
+        (snapshot) => snapshot.name === snapshotName && snapshot.selectionKey === composerSelectionKey,
+      )
+
+      if (existingSnapshot) {
+        return [
+          {
+            ...existingSnapshot,
+            draftMode,
+            selectedIdeaIds: [...selectedIdeaIds],
+            markdown: composerMarkdown,
+            updatedAt,
+          },
+          ...currentSnapshots.filter((snapshot) => snapshot.id !== existingSnapshot.id),
+        ]
+      }
+
+      return [
+        {
+          id: crypto.randomUUID(),
+          name: snapshotName,
+          selectionKey: composerSelectionKey,
+          selectedIdeaIds: [...selectedIdeaIds],
+          draftMode,
+          markdown: composerMarkdown,
+          updatedAt,
+        },
+        ...currentSnapshots,
+      ]
+    })
+    setComposerStatus(`Saved snapshot "${snapshotName}".`)
+  }
+
+  function handleLoadComposerSnapshot(snapshot: StoredComposerSnapshot) {
+    setComposerSnapshotName(snapshot.name)
+
+    if (snapshot.selectionKey === composerSelectionKey) {
+      setComposerMarkdown(snapshot.markdown)
+      setComposerStatus(`Loaded snapshot "${snapshot.name}".`)
+      return
+    }
+
+    pendingSnapshotLoadRef.current = snapshot
+    setSelectedIdeaIds(snapshot.selectedIdeaIds)
+    setDraftMode(snapshot.draftMode)
+    setComposerStatus(`Loading snapshot "${snapshot.name}"...`)
+  }
+
+  function handleDeleteComposerSnapshot(snapshotId: string) {
+    setComposerSnapshots((currentSnapshots) =>
+      currentSnapshots.filter((snapshot) => snapshot.id !== snapshotId),
+    )
+    setComposerStatus('Snapshot deleted.')
   }
 
   function hydrateCachedSnapshot(
@@ -1161,6 +1248,54 @@ export default function WorkspacePage() {
                   </div>
                 )}
               </section>
+              <section className="context-card-block repo-analysis-block">
+                <div className="context-block-head">
+                  <h3>Code-side Backlinks</h3>
+                  <span>{codeBacklinkGroups.length} targets</span>
+                </div>
+                {codeBacklinkGroups.length ? (
+                  <div className="saved-mapping-list">
+                    {codeBacklinkGroups.map((group) => (
+                      <article key={group.path} className="candidate-card candidate-card-compact">
+                        <div className="candidate-head">
+                          <strong>{group.symbol}</strong>
+                          <span>{group.paragraphs.length} linked paragraphs</span>
+                        </div>
+                        <p className="candidate-path">{group.path}</p>
+                        <div className="candidate-actions">
+                          {group.targetUrl ? (
+                            <a
+                              className="secondary-link secondary-link-inline"
+                              href={group.targetUrl}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              Open Code
+                            </a>
+                          ) : null}
+                        </div>
+                        <div className="code-backlink-list">
+                          {group.paragraphs.slice(0, 4).map((paragraph) => (
+                            <button
+                              key={`${group.path}-${paragraph.paragraphId}`}
+                              className="ghost-button ghost-button-small code-backlink-button"
+                              onClick={() => handleJumpToConfirmedCodeLink(paragraph)}
+                              type="button"
+                            >
+                              {paragraph.paragraphLabel}
+                            </button>
+                          ))}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-inline-state">
+                    Confirm a few mappings and the code-side backlink view will
+                    show which paper paragraphs point into the same code target.
+                  </div>
+                )}
+              </section>
               {selectedParagraph ? (
                 <>
                   <p className="code-panel-note">
@@ -1466,6 +1601,24 @@ export default function WorkspacePage() {
                 Clear Selection
               </button>
             </div>
+            <div className="idea-form-row">
+              <label className="control-group control-group-wide">
+                <span>Snapshot Name</span>
+                <input
+                  placeholder={ideaDraft.title || 'Named draft snapshot'}
+                  value={composerSnapshotName}
+                  onChange={(event) => setComposerSnapshotName(event.target.value)}
+                />
+              </label>
+              <button
+                className="ghost-button ghost-button-small"
+                disabled={!selectedIdeas.length || !composerMarkdown.trim()}
+                onClick={handleSaveComposerSnapshot}
+                type="button"
+              >
+                Save Snapshot
+              </button>
+            </div>
             {selectedIdeas.length ? (
               <article className="context-card-block composer-card">
                 <div className="context-block-head">
@@ -1522,6 +1675,48 @@ export default function WorkspacePage() {
                 structured draft editor here.
               </div>
             )}
+            <section className="context-card-block composer-card">
+              <div className="context-block-head">
+                <h3>Saved Draft Snapshots</h3>
+                <span>{composerSnapshots.length} snapshots</span>
+              </div>
+              {composerSnapshots.length ? (
+                <div className="saved-mapping-list">
+                  {composerSnapshots.map((snapshot) => (
+                    <article key={snapshot.id} className="candidate-card candidate-card-compact">
+                      <div className="candidate-head">
+                        <strong>{snapshot.name}</strong>
+                        <span>{snapshot.draftMode}</span>
+                      </div>
+                      <p className="candidate-path">
+                        {`${snapshot.selectedIdeaIds.length} ideas / updated ${formatIdeaTime(snapshot.updatedAt)}`}
+                      </p>
+                      <div className="candidate-actions">
+                        <button
+                          className="ghost-button ghost-button-small"
+                          onClick={() => handleLoadComposerSnapshot(snapshot)}
+                          type="button"
+                        >
+                          Load Snapshot
+                        </button>
+                        <button
+                          className="ghost-button ghost-button-small"
+                          onClick={() => handleDeleteComposerSnapshot(snapshot.id)}
+                          type="button"
+                        >
+                          Delete Snapshot
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-inline-state">
+                  Save a named snapshot when you want to keep multiple draft
+                  versions instead of only the active recovered draft.
+                </div>
+              )}
+            </section>
           </div>
         </aside>
       </div>
@@ -1533,6 +1728,13 @@ type ContextFieldBlockProps = {
   attribution: EvidenceAttribution
   body: string
   title: string
+}
+
+type CodeBacklinkGroup = {
+  symbol: string
+  path: string
+  targetUrl?: string
+  paragraphs: StoredCodeLinkDecision[]
 }
 
 function ContextFieldBlock({ attribution, body, title }: ContextFieldBlockProps) {
@@ -1691,4 +1893,39 @@ function matchesIdeaTimeFilter(idea: StoredIdea, filterLabel: IdeaTimeFilter): b
 function buildComposerSelectionKey(selectedIds: string[], mode: DraftMode): string {
   const normalizedIds = [...selectedIds].sort((left, right) => left.localeCompare(right))
   return `${mode}::${normalizedIds.join(',')}`
+}
+
+function buildCodeBacklinkGroups(decisions: StoredCodeLinkDecision[]): CodeBacklinkGroup[] {
+  const groups = new Map<string, CodeBacklinkGroup>()
+
+  for (const decision of decisions) {
+    const group = groups.get(decision.path)
+    if (!group) {
+      groups.set(decision.path, {
+        symbol: decision.symbol,
+        path: decision.path,
+        targetUrl: decision.targetUrl,
+        paragraphs: [decision],
+      })
+      continue
+    }
+
+    if (!group.targetUrl && decision.targetUrl) {
+      group.targetUrl = decision.targetUrl
+    }
+
+    if (!group.paragraphs.some((paragraph) => paragraph.paragraphId === decision.paragraphId)) {
+      group.paragraphs.push(decision)
+    }
+  }
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      paragraphs: [...group.paragraphs].sort((left, right) => left.pageNumber - right.pageNumber),
+    }))
+    .sort(
+      (left, right) =>
+        right.paragraphs.length - left.paragraphs.length || left.path.localeCompare(right.path),
+    )
 }

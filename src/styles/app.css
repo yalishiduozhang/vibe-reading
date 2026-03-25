@@ -744,6 +744,16 @@
   gap: 12px;
 }
 
+.code-backlink-list {
+  display: grid;
+  gap: 8px;
+}
+
+.code-backlink-button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .candidate-card-compact {
   padding: 14px;
 }

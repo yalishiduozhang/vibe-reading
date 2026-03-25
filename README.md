@@ -14,8 +14,8 @@ Current focus:
 
 - Stable PDF reading with paragraph anchors and jump-back behavior
 - Evidence-backed context cards in the reading workspace
-- Real GitHub repo indexing, direct code-target links, and confirmation-memory scaffolding
-- Idea capture with filtering, editing, draft recovery, and Markdown export
+- Real GitHub repo indexing, direct code-target links, and code-side backlinks
+- Idea capture with filtering, editing, draft recovery, named snapshots, and Markdown export
 
 Primary planning and research documents live in [`docs/`](./docs):
 

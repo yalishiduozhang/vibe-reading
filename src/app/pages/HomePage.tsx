@@ -33,7 +33,7 @@ const completedSteps = [
   'Information architecture and wireframes committed',
   'Reader Core anchors, evidence schema, and jump-back are working',
   'Primary demo sample is now frozen for paper-to-code linking',
-  'Idea workspace now supports filtering, editing, and draft recovery',
+  'Idea workspace now supports filtering, editing, draft recovery, and snapshots',
 ]
 
 export default function HomePage() {
@@ -61,8 +61,9 @@ export default function HomePage() {
           <strong>Phase 4 and Phase 5 in progress</strong>
           <p>
             The workspace has moved past reader-only work. The active push now
-            combines real repo indexing, direct code targets, confirmation
-            memory, and recoverable idea-to-draft output inside the same flow.
+            combines real repo indexing, direct code targets, code-side
+            backlinks, and recoverable idea-to-draft output inside the same
+            flow.
           </p>
         </div>
       </header>
@@ -110,13 +111,13 @@ export default function HomePage() {
         <section className="card card-wide accent-card">
           <div className="section-head">
             <p className="section-kicker">Implementation Focus</p>
-            <h2>Deepen code links and make ideas manageable over time.</h2>
+            <h2>Strengthen bidirectional code links and lightweight draft versioning.</h2>
           </div>
           <p className="accent-copy">
             The active milestone is no longer just loading PDFs. The current
             work is tightening real repo artifacts, paper-to-code confirmation
-            memory, and the local-first management path for captured ideas and
-            drafts.
+            memory, code-side backlinks, and the local-first management path
+            for captured ideas and draft snapshots.
           </p>
         </section>
       </main>
