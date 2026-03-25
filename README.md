@@ -1,4 +1,10 @@
-# OpenVibeRead
+<div align="center">
+  <img src="./docs/logo.svg" alt="OpenVibeRead Logo" width="160" height="160" />
+  <h1>OpenVibeRead</h1>
+  <p><em>An open-source research reading workbench for papers, code, and ideas.</em></p>
+</div>
+
+<br/>
 
 OpenVibeRead is an open-source research reading workbench focused on three linked workflows:
 

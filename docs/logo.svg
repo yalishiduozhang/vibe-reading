@@ -1,0 +1,36 @@
+<svg width="200" height="200" viewBox="0 0 200 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="200" height="200" rx="48" fill="url(#bg_gradient)"/>
+  
+  <g filter="url(#glow)">
+    <path d="M55 115C55 115 80 95 100 110C120 95 145 115 145 115V65C145 65 120 45 100 60C80 45 55 65 55 65V115Z" stroke="url(#line_gradient)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M100 60V110" stroke="url(#line_gradient)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M70 85C70 85 85 75 100 83" stroke="url(#line_gradient)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M130 85C130 85 115 75 100 83" stroke="url(#line_gradient)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- "Vibe" Waves inside the book -->
+  <path d="M70 100C70 100 80 92 90 95" stroke="#38BDF8" stroke-width="4" stroke-linecap="round"/>
+  <path d="M130 100C130 100 120 92 110 95" stroke="#A78BFA" stroke-width="4" stroke-linecap="round"/>
+
+  <!-- AI Stars -->
+  <path d="M100 25L103 35L113 38L103 41L100 51L97 41L87 38L97 35L100 25Z" fill="#FDE047" filter="url(#glow)"/>
+  <path d="M135 45L137 50L142 52L137 54L135 59L133 54L128 52L133 50L135 45Z" fill="#6EE7B7"/>
+  <path d="M65 50L66 54L70 55L66 56L65 60L64 56L60 55L64 54L65 50Z" fill="#FDBA74"/>
+
+  <defs>
+    <linearGradient id="bg_gradient" x1="0" y1="0" x2="200" y2="200" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#020617"/>
+      <stop offset="0.5" stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#1E1B4B"/>
+    </linearGradient>
+    <linearGradient id="line_gradient" x1="55" y1="60" x2="145" y2="115" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#60A5FA"/>
+      <stop offset="0.5" stop-color="#A78BFA"/>
+      <stop offset="1" stop-color="#F472B6"/>
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+</svg>
