@@ -1332,6 +1332,7 @@ export default function WorkspacePage() {
                                 preview.topCandidate.lineNumber,
                               )}
                             </p>
+                            <CodeSnippetPreview snippet={preview.topCandidate.snippet} />
                             {preview.topCandidate.signals?.length ? (
                               <div className="repo-signal-list">
                                 {preview.topCandidate.signals.map((signal) => (
@@ -1390,6 +1391,7 @@ export default function WorkspacePage() {
                         <p className="candidate-path">
                           {formatCodeTargetPath(decision.path, decision.lineNumber)}
                         </p>
+                        <CodeSnippetPreview snippet={decision.snippet} />
                         {decision.signals?.length ? (
                           <div className="repo-signal-list">
                             {decision.signals.map((signal) => (
@@ -1445,6 +1447,7 @@ export default function WorkspacePage() {
                         <p className="candidate-path">
                           {formatCodeTargetPath(group.path, group.lineNumber)}
                         </p>
+                        <CodeSnippetPreview snippet={group.snippet} />
                         <div className="candidate-actions">
                           {group.targetUrl ? (
                             <a
@@ -1502,6 +1505,7 @@ export default function WorkspacePage() {
                           <p className="candidate-path">
                             {formatCodeTargetPath(candidate.path, candidate.lineNumber)}
                           </p>
+                          <CodeSnippetPreview snippet={candidate.snippet} />
                           {candidate.signals?.length ? (
                             <div className="repo-signal-list">
                               {candidate.signals.map((signal) => (
@@ -2002,6 +2006,7 @@ type CodeBacklinkGroup = {
   path: string
   targetUrl?: string
   lineNumber?: number
+  snippet?: string
   paragraphs: StoredCodeLinkDecision[]
 }
 
@@ -2023,6 +2028,14 @@ function ContextFieldBlock({ attribution, body, title }: ContextFieldBlockProps)
       <p>{body}</p>
     </section>
   )
+}
+
+function CodeSnippetPreview({ snippet }: { snippet?: string }) {
+  if (!snippet) {
+    return null
+  }
+
+  return <pre className="candidate-snippet">{snippet}</pre>
 }
 
 function resolveParagraphId(
@@ -2284,6 +2297,7 @@ function buildCodeBacklinkGroups(decisions: StoredCodeLinkDecision[]): CodeBackl
         path: decision.path,
         targetUrl: decision.targetUrl,
         lineNumber: decision.lineNumber,
+        snippet: decision.snippet,
         paragraphs: [decision],
       })
       continue
@@ -2295,6 +2309,10 @@ function buildCodeBacklinkGroups(decisions: StoredCodeLinkDecision[]): CodeBackl
 
     if (!group.lineNumber && decision.lineNumber) {
       group.lineNumber = decision.lineNumber
+    }
+
+    if (!group.snippet && decision.snippet) {
+      group.snippet = decision.snippet
     }
 
     if (!group.paragraphs.some((paragraph) => paragraph.paragraphId === decision.paragraphId)) {

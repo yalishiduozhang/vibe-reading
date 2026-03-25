@@ -86,6 +86,7 @@ function buildIndexedCodeCandidates(
     path: buildRepoPath(repoIndex.repoUrl, artifact.file.path),
     reason: buildIndexedReason(artifact.matches, artifact.file.path),
     signals: artifact.matches.slice(0, 3),
+    snippet: buildIndexedSnippet(artifact.file, paragraphTerms, artifact.symbolMatch?.lineNumber),
     confidence: mapScoreToConfidence(artifact.score),
     targetUrl: buildArtifactTargetUrl(artifact.file.htmlUrl, artifact.symbolMatch?.lineNumber),
     lineNumber: artifact.symbolMatch?.lineNumber,
@@ -326,6 +327,70 @@ function buildRepoTargetUrl(
 
 function buildArtifactTargetUrl(fileHtmlUrl: string, lineNumber?: number): string {
   return lineNumber ? `${fileHtmlUrl}#L${lineNumber}` : fileHtmlUrl
+}
+
+function buildIndexedSnippet(
+  file: GitHubRepoFile,
+  paragraphTerms: string[],
+  preferredLineNumber?: number,
+): string | undefined {
+  const lines = file.text.split('\n')
+  if (!lines.length) {
+    return undefined
+  }
+
+  const centerLineNumber =
+    preferredLineNumber ?? findSnippetAnchorLine(lines, paragraphTerms) ?? findFirstMeaningfulLine(lines)
+  if (!centerLineNumber) {
+    return undefined
+  }
+
+  const startLine = Math.max(centerLineNumber - 2, 1)
+  const endLine = Math.min(centerLineNumber + 2, lines.length)
+  const snippetLines: string[] = []
+
+  for (let lineNumber = startLine; lineNumber <= endLine; lineNumber += 1) {
+    const line = lines[lineNumber - 1]?.replace(/\t/g, '  ').trimEnd() ?? ''
+    snippetLines.push(`${String(lineNumber).padStart(4, ' ')} | ${truncateSnippetLine(line)}`)
+  }
+
+  if (!snippetLines.some((line) => line.trim())) {
+    return undefined
+  }
+
+  return snippetLines.join('\n')
+}
+
+function findSnippetAnchorLine(lines: string[], paragraphTerms: string[]): number | null {
+  for (const term of paragraphTerms) {
+    const loweredTerm = term.toLowerCase()
+    const matchedLineNumber = lines.findIndex((line) => line.toLowerCase().includes(loweredTerm))
+    if (matchedLineNumber >= 0) {
+      return matchedLineNumber + 1
+    }
+  }
+
+  const definitionLineNumber = lines.findIndex((line) =>
+    /^\s*(?:def|class|function|export\s+function|export\s+class|const\s+[A-Za-z_])/i.test(line),
+  )
+  if (definitionLineNumber >= 0) {
+    return definitionLineNumber + 1
+  }
+
+  return null
+}
+
+function findFirstMeaningfulLine(lines: string[]): number | null {
+  const lineNumber = lines.findIndex((line) => line.trim().length > 0)
+  return lineNumber >= 0 ? lineNumber + 1 : null
+}
+
+function truncateSnippetLine(line: string): string {
+  if (line.length <= 120) {
+    return line
+  }
+
+  return `${line.slice(0, 117)}...`
 }
 
 function rankSymbolsAgainstParagraph(

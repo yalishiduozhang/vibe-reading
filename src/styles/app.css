@@ -716,6 +716,20 @@
   line-height: 1.35;
 }
 
+.candidate-snippet {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(7, 11, 18, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(243, 239, 230, 0.78);
+  font-family: 'IBM Plex Mono', 'SFMono-Regular', 'Cascadia Code', monospace;
+  font-size: 0.76rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-x: auto;
+}
+
 .secondary-link-inline {
   min-height: 38px;
   padding-inline: 14px;

@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 17:40 (Asia/Shanghai)  
+最后更新：2026-03-25 17:46 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1116,6 +1116,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估 LoRA / CLIP 是否也进入真实远程索引链路，而不只停在 preset fallback
 - 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
 
+
+### 2026-03-25 17:46 / Phase 4 snippet pass
+
+#### 已完成
+
+- indexed candidate 现在会基于命中的 symbol / term 位置生成带行号的最小源码 snippet
+- `CodeCandidate`、confirmation memory 和 code backlink 都开始支持持久化 snippet
+- Active candidates、`Cross-sample Regression`、confirmation memory、code backlink 现在都可直接显示源码预览
+- snippet 预览统一采用轻量 monospace block，不额外引入独立代码浏览器
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 现在已经从 `target + signal + reason` 继续推进到 `target + signal + snippet + reason`
+- 这让 Code Link 的证据层更直接，用户不需要立刻离开当前工作区就能看到候选附近的源码上下文
+- 当前工作区里的代码联动已经更接近“最小代码浏览入口”，而不只是跳 GitHub 链接
+
+#### 遇到的问题
+
+- snippet 仍是基于已索引的少量 key files 生成，不是完整 repo 范围的代码浏览
+- 对 sample fallback candidate，目前仍然大多没有真实 snippet，主要覆盖 indexed candidate 和后续新确认记录
+- 还没有把 snippet 和更细粒度的 symbol score 明细绑定，当前仍是轻量解释模式
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否把 LoRA / CLIP 的真实远程索引纳入回归链路，让更多 sample 也有 snippet
+- 继续推进 `M4`：评估是否为 indexed repo preview 增加更明确的 snippet / symbol cache
+- 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1321,6 +1351,15 @@ AI 任务拆分为：
 
 - 当前阶段更需要让候选排序“可见、可解释、可持久化”，而不是过早把排序器做成复杂调试系统。
 - 这条路径已经能同时服务 active candidate、confirmation memory 和 cross-sample regression，复用价值更高。
+
+### D-023（2026-03-25）
+
+决定：在完整代码浏览器尚未进入范围前，先在 Code Link 中补 lightweight snippet 预览，而不是直接扩展成完整 file viewer。
+
+原因：
+
+- 当前更重要的是让候选映射具备“就地可验证”的最小源码证据，而不是立刻承担完整代码浏览职责。
+- 这条路径可以直接复用现有 indexed key files 数据，并同时服务 active candidate、confirmation memory 和 code backlink。
 
 ## 16. 当前开放问题
 
