@@ -133,6 +133,7 @@ export default function WorkspacePage() {
   const [editingSnapshotId, setEditingSnapshotId] = useState('')
   const [editingSnapshotName, setEditingSnapshotName] = useState('')
   const [editingSnapshotNote, setEditingSnapshotNote] = useState('')
+  const [expandedSnapshotId, setExpandedSnapshotId] = useState('')
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
   const [repoIndexSource, setRepoIndexSource] = useState<RepoIndexSource>('none')
@@ -926,6 +927,9 @@ export default function WorkspacePage() {
       setEditingSnapshotName('')
       setEditingSnapshotNote('')
     }
+    if (expandedSnapshotId === snapshotId) {
+      setExpandedSnapshotId('')
+    }
 
     setComposerSnapshots((currentSnapshots) =>
       currentSnapshots.filter((snapshot) => snapshot.id !== snapshotId),
@@ -1010,6 +1014,10 @@ export default function WorkspacePage() {
     }
 
     setComposerStatus(nextIsArchived ? 'Snapshot archived.' : 'Snapshot restored.')
+  }
+
+  function handleToggleComposerSnapshotPreview(snapshotId: string) {
+    setExpandedSnapshotId((currentId) => (currentId === snapshotId ? '' : snapshotId))
   }
 
   function hydrateCachedSnapshot(
@@ -2184,6 +2192,9 @@ export default function WorkspacePage() {
                           {`Archived ${formatIdeaTime(snapshot.archivedAt)}`}
                         </p>
                       ) : null}
+                      {expandedSnapshotId === snapshot.id ? (
+                        <CodeSnippetPreview snippet={buildSnapshotMarkdownPreview(snapshot.markdown)} />
+                      ) : null}
                       {editingSnapshotId === snapshot.id ? (
                         <>
                           <label className="control-group control-group-wide">
@@ -2228,6 +2239,13 @@ export default function WorkspacePage() {
                             type="button"
                           >
                             Load Snapshot
+                          </button>
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleToggleComposerSnapshotPreview(snapshot.id)}
+                            type="button"
+                          >
+                            {expandedSnapshotId === snapshot.id ? 'Hide Preview' : 'Preview'}
                           </button>
                           <button
                             className="ghost-button ghost-button-small"
@@ -2448,6 +2466,20 @@ function summarizeRepoSnippet(text: string): string {
   }
 
   return `${normalized.slice(0, 177)}...`
+}
+
+function buildSnapshotMarkdownPreview(markdown: string, maxLines = 12): string | undefined {
+  const lines = markdown.trim().split('\n')
+  if (!lines.length || !lines[0]) {
+    return undefined
+  }
+
+  const previewLines = lines.slice(0, maxLines)
+  if (lines.length > maxLines) {
+    previewLines.push('...')
+  }
+
+  return previewLines.join('\n')
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

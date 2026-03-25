@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 18:53 (Asia/Shanghai)  
+最后更新：2026-03-25 18:56 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1324,6 +1324,35 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否把 symbol cache 进一步并入 repo index 的持久化结构
 - 继续推进 `M4`：评估是否把 regression diagnostics 做成更明确的错误类型与刷新建议
 
+
+### 2026-03-25 18:56 / Phase 5 snapshot detail pass
+
+#### 已完成
+
+- Snapshot 列表开始支持行内 `Preview / Hide Preview`
+- 每个 snapshot 卡片现在可以直接展开 Markdown 详情预览，而不必先 Load 回 active draft
+- 当前详情预览与现有 snippet block 复用同一套轻量呈现方式，没有额外引入新页面
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M5` 已经从“能保存、能筛选、能归档”继续推进到“能在列表里直接看 draft 内容”
+- 这让 snapshot 更接近轻量 draft 实体，而不是只有名字和元信息的版本点
+- 当前这一步仍然是轻量详情视图，不会过早把系统拉向更复杂的文档页结构
+
+#### 遇到的问题
+
+- 详情预览目前仍是截断后的 Markdown 片段，不是完整阅读页
+- snapshot 之间还没有更强的关系结构，例如版本链或父子草稿
+- 当前详情视图仍然只服务于列表内快速判断，不承担完整编辑职责
+
+#### 下一步
+
+- 继续推进 `M5`：评估是否给 snapshot 增加更稳定的 detail / entity 视图，而不只是列表内预览
+- 继续推进 `M4`：评估是否把 symbol cache 进一步并入 repo index 的持久化结构
+- 继续推进 `M4`：评估是否把 regression diagnostics 做成更明确的错误类型与刷新建议
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1592,6 +1621,15 @@ AI 任务拆分为：
 
 - 这样可以继续收敛 `M5` 的组织能力，而不需要立刻引入新的文档层级和页面结构。
 - 这条路径与当前 Local-first snapshot 模型兼容，能更低成本地验证真实使用中的管理动作。
+
+### D-030（2026-03-25）
+
+决定：snapshot 的详情浏览第一轮先采用列表内 Markdown 预览，而不是立即新开独立 detail 页面。
+
+原因：
+
+- 当前更需要验证用户是否真的需要频繁查看 snapshot 内容，而不是立刻扩展页面结构。
+- 列表内预览已经能显著提高判断效率，同时保持当前工作区的信息密度和实现成本平衡。
 
 ## 16. 当前开放问题
 
