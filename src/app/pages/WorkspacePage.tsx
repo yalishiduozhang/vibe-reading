@@ -382,6 +382,7 @@ export default function WorkspacePage() {
   ).sort((left, right) => left.localeCompare(right))
   const activeSnapshotCount = composerSnapshots.filter((snapshot) => !snapshot.archivedAt).length
   const archivedSnapshotCount = composerSnapshots.filter((snapshot) => Boolean(snapshot.archivedAt)).length
+  const expandedSnapshot = composerSnapshots.find((snapshot) => snapshot.id === expandedSnapshotId) ?? null
   const filteredComposerSnapshots = composerSnapshots
     .filter((snapshot) => matchesSnapshotSearch(snapshot, snapshotSearchQuery))
     .filter(
@@ -835,14 +836,18 @@ export default function WorkspacePage() {
       return
     }
 
+    await copyMarkdownToClipboard(composerMarkdown, 'Markdown copied to clipboard.')
+  }
+
+  async function copyMarkdownToClipboard(markdown: string, successMessage: string) {
     if (!navigator.clipboard?.writeText) {
       setComposerStatus('Clipboard is unavailable in this browser.')
       return
     }
 
     try {
-      await navigator.clipboard.writeText(composerMarkdown)
-      setComposerStatus('Markdown copied to clipboard.')
+      await navigator.clipboard.writeText(markdown)
+      setComposerStatus(successMessage)
     } catch {
       setComposerStatus('Failed to copy Markdown to clipboard.')
     }
@@ -853,17 +858,29 @@ export default function WorkspacePage() {
       return
     }
 
-    const blob = new Blob([composerMarkdown], {
+    downloadMarkdownFile(composerMarkdown, composerFileName)
+  }
+
+  function downloadMarkdownFile(markdown: string, fileName: string) {
+    const blob = new Blob([markdown], {
       type: 'text/markdown;charset=utf-8',
     })
     const objectUrl = window.URL.createObjectURL(blob)
     const anchor = document.createElement('a')
 
     anchor.href = objectUrl
-    anchor.download = composerFileName
+    anchor.download = fileName
     anchor.click()
     window.URL.revokeObjectURL(objectUrl)
-    setComposerStatus(`Downloaded ${composerFileName}.`)
+    setComposerStatus(`Downloaded ${fileName}.`)
+  }
+
+  async function handleCopyComposerSnapshotMarkdown(snapshot: StoredComposerSnapshot) {
+    await copyMarkdownToClipboard(snapshot.markdown, `Copied snapshot "${snapshot.name}".`)
+  }
+
+  function handleDownloadComposerSnapshotMarkdown(snapshot: StoredComposerSnapshot) {
+    downloadMarkdownFile(snapshot.markdown, buildIdeaDraftFileName(snapshot.name))
   }
 
   function handleResetComposerDraft() {
@@ -2208,6 +2225,53 @@ export default function WorkspacePage() {
                   </label>
                 </div>
               ) : null}
+              {expandedSnapshot ? (
+                <article className="context-card-block composer-card">
+                  <div className="context-block-head">
+                    <h3>{expandedSnapshot.name}</h3>
+                    <span>{expandedSnapshot.archivedAt ? 'Archived snapshot' : expandedSnapshot.draftMode}</span>
+                  </div>
+                  <p className="candidate-path">{getSnapshotDocumentName(expandedSnapshot)}</p>
+                  <p className="repo-analysis-note">
+                    {`${expandedSnapshot.selectedIdeaIds.length} ideas · ${getSnapshotTagSummary(expandedSnapshot)} · updated ${formatIdeaTime(expandedSnapshot.updatedAt)}`}
+                  </p>
+                  {expandedSnapshot.note ? <p>{expandedSnapshot.note}</p> : null}
+                  {expandedSnapshot.archivedAt ? (
+                    <p className="repo-analysis-note">{`Archived ${formatIdeaTime(expandedSnapshot.archivedAt)}`}</p>
+                  ) : null}
+                  <div className="candidate-actions">
+                    <button
+                      className="ghost-button ghost-button-small"
+                      onClick={() => handleLoadComposerSnapshot(expandedSnapshot)}
+                      type="button"
+                    >
+                      Load Snapshot
+                    </button>
+                    <button
+                      className="ghost-button ghost-button-small"
+                      onClick={() => void handleCopyComposerSnapshotMarkdown(expandedSnapshot)}
+                      type="button"
+                    >
+                      Copy Markdown
+                    </button>
+                    <button
+                      className="ghost-button ghost-button-small"
+                      onClick={() => handleDownloadComposerSnapshotMarkdown(expandedSnapshot)}
+                      type="button"
+                    >
+                      Download .md
+                    </button>
+                    <button
+                      className="ghost-button ghost-button-small"
+                      onClick={() => handleToggleComposerSnapshotPreview(expandedSnapshot.id)}
+                      type="button"
+                    >
+                      Close Detail
+                    </button>
+                  </div>
+                  <CodeSnippetPreview snippet={expandedSnapshot.markdown} />
+                </article>
+              ) : null}
               {composerSnapshots.length ? (
                 filteredComposerSnapshots.length ? (
                   <div className="saved-mapping-list">
@@ -2228,9 +2292,6 @@ export default function WorkspacePage() {
                         <p className="repo-analysis-note">
                           {`Archived ${formatIdeaTime(snapshot.archivedAt)}`}
                         </p>
-                      ) : null}
-                      {expandedSnapshotId === snapshot.id ? (
-                        <CodeSnippetPreview snippet={buildSnapshotMarkdownPreview(snapshot.markdown)} />
                       ) : null}
                       {editingSnapshotId === snapshot.id ? (
                         <>
@@ -2282,7 +2343,7 @@ export default function WorkspacePage() {
                             onClick={() => handleToggleComposerSnapshotPreview(snapshot.id)}
                             type="button"
                           >
-                            {expandedSnapshotId === snapshot.id ? 'Hide Preview' : 'Preview'}
+                            {expandedSnapshotId === snapshot.id ? 'Hide Detail' : 'Open Detail'}
                           </button>
                           <button
                             className="ghost-button ghost-button-small"
@@ -2503,20 +2564,6 @@ function summarizeRepoSnippet(text: string): string {
   }
 
   return `${normalized.slice(0, 177)}...`
-}
-
-function buildSnapshotMarkdownPreview(markdown: string, maxLines = 12): string | undefined {
-  const lines = markdown.trim().split('\n')
-  if (!lines.length || !lines[0]) {
-    return undefined
-  }
-
-  const previewLines = lines.slice(0, maxLines)
-  if (lines.length > maxLines) {
-    previewLines.push('...')
-  }
-
-  return previewLines.join('\n')
 }
 
 function getErrorMessage(error: unknown, fallback: string): string {

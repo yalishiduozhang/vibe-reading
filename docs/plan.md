@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:05 (Asia/Shanghai)  
+最后更新：2026-03-25 19:09 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1443,6 +1443,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否给 symbol cache 增加更细的搜索或展开策略
 - 继续推进 `WP-H`：评估是否把 repo/index diagnostics 进一步下沉出页面层
 
+
+### 2026-03-25 19:09 / Phase 5 snapshot detail card pass
+
+#### 已完成
+
+- `Saved Draft Snapshots` 现在不再只靠列表内小预览判断内容，而是支持在工作台内打开稳定的 snapshot detail card
+- detail card 会展示 snapshot 的 paper、tag summary、更新时间、archive 状态、备注和完整 Markdown 内容
+- detail card 里也补上了 `Load Snapshot / Copy Markdown / Download .md / Close Detail`
+- 这让 snapshot 更接近轻量 draft entity，而不是只有列表项与临时 preview
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M5` 已经从“snapshot 可保存、可筛选、可归档、可预览”进一步推进到“有稳定 detail/card 视图”
+- 当前 detail 仍留在工作台内，没有扩展成独立页面，但已经足够支撑更像实体的浏览和操作
+- 这一步比直接开新页面更稳，能继续验证 snapshot 是否真的需要升级为完整文档层
+
+#### 遇到的问题
+
+- detail card 仍然是工作台内视图，不是独立路由或列表页
+- 目前 snapshot 之间还没有版本关系、比较视图或派生链
+- 复制和下载动作仍复用当前 composer 状态提示，没有单独的 snapshot 通知区
+
+#### 下一步
+
+- 继续推进 `M5`：评估 snapshot 是否需要更明确的 entity 操作，例如 compare、duplicate 或版本链
+- 继续推进 `M4`：评估是否给 symbol cache 增加更细的搜索或展开策略
+- 继续推进 `WP-H`：评估是否把 snapshot/detail 操作进一步下沉出页面层
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1747,6 +1777,15 @@ AI 任务拆分为：
 
 - 当前 warm sample indexes 的失败来源仍然比较少，用轻量归类就足以支撑刷新建议和调试判断。
 - 先把 `type + hint` 补齐，可以更快提高可解释性，同时保留后续再升级为结构化错误码的空间。
+
+### D-034（2026-03-25）
+
+决定：snapshot 的下一步 detail 能力先落成工作台内的稳定 detail card，而不是立即扩展为独立页面或新路由。
+
+原因：
+
+- 当前更需要验证用户是否会频繁打开、复制、下载和回装 snapshot，而不是立刻把信息架构升级成新的页面层。
+- detail card 已经能显著提升 snapshot 的实体感，同时继续保持当前工作台流畅的 Local-first 交互。
 
 ## 16. 当前开放问题
 
