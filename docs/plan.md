@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 17:52 (Asia/Shanghai)  
+最后更新：2026-03-25 18:07 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1176,6 +1176,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：补更直接的 indexed snippet / symbol cache 组织方式
 - 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
 
+
+### 2026-03-25 18:07 / Phase 4 cache persistence pass
+
+#### 已完成
+
+- 新增 `src/features/code-link/storage.ts`，开始承接 repo index cache 的本地持久化与校验
+- `WorkspacePage` 的 repo index cache 现在会从 feature storage 初始化，而不是每次刷新都从空 ref 开始
+- 当前 repo 索引与 sample regression 预热出的索引结果都会写回同一份 local-first cache
+- 持久化层会按 `generatedAt` 保留最近的少量 repo index，避免无限增长
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里关于 sample index cache 的“持久化边界”现在已经从待评估变成了已落地能力
+- 当前 code-link 的索引链路不再只是会话内存态，而是开始具备跨刷新保留的 local-first 行为
+- 这一步也让 `WP-H` 往前走了一点：repo index cache 已经从页面层 ref 逻辑开始下沉到 feature storage
+
+#### 遇到的问题
+
+- 当前 repo index cache 仍保留在 browser localStorage，不是更稳的数据库或文件级缓存
+- 现有 cache 裁剪策略仍很轻，只按最近时间保留少量条目
+- 还没有把 cache hit / stale 状态直接展示给用户
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否为 indexed repo preview 增加更明确的 snippet / symbol cache 组织方式
+- 继续推进 `M4`：评估是否为 repo index cache 加入更可见的命中 / 过期状态
+- 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1399,6 +1429,15 @@ AI 任务拆分为：
 
 - 这样能把多 sample 真实索引带进工作区，同时保持当前原型对网络动作的显式控制。
 - 在索引缓存和失败恢复策略还没成熟前，手动 warm-up 比隐式后台抓取更稳妥。
+
+### D-025（2026-03-25）
+
+决定：repo index cache 的第一轮持久化先采用 feature-level localStorage cache，而不是立即引入更重的数据库或文件缓存层。
+
+原因：
+
+- 当前更需要先把“跨刷新保留索引结果”这件事做通，再决定是否升级为更重的数据层。
+- 这条路径与现有 local-first prototype 一致，也能尽快服务当前 repo index 和 sample regression 两条链路。
 
 ## 16. 当前开放问题
 

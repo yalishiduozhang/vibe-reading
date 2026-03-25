@@ -24,6 +24,10 @@ import {
   type StoredCodeLinkDecision,
 } from '../../features/code-link/mappings'
 import {
+  loadStoredRepoIndexCache,
+  saveStoredRepoIndexCache,
+} from '../../features/code-link/storage'
+import {
   buildIdeaDraftFileName,
   buildIdeaDocumentDraft,
   draftModes,
@@ -72,7 +76,7 @@ export default function WorkspacePage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const readerShellRef = useRef<HTMLDivElement | null>(null)
   const snapshotCacheRef = useRef<Record<string, ReaderPageSnapshot>>({})
-  const repoIndexCacheRef = useRef<Record<string, GitHubRepoIndex>>({})
+  const repoIndexCacheRef = useRef<Record<string, GitHubRepoIndex>>(loadStoredRepoIndexCache())
   const selectedByPageRef = useRef<Record<number, string>>({})
   const pendingJumpRef = useRef<PendingJump>(null)
   const fileInputId = useId()
@@ -116,7 +120,7 @@ export default function WorkspacePage() {
   const [editingSnapshotName, setEditingSnapshotName] = useState('')
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
-  const [sampleRegressionIndexVersion, setSampleRegressionIndexVersion] = useState(0)
+  const [repoIndexCacheVersion, setRepoIndexCacheVersion] = useState(0)
   const [sampleRegressionIndexStatus, setSampleRegressionIndexStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
@@ -244,6 +248,10 @@ export default function WorkspacePage() {
   }, [composerSnapshots])
 
   useEffect(() => {
+    saveStoredRepoIndexCache(repoIndexCacheRef.current)
+  }, [repoIndexCacheVersion])
+
+  useEffect(() => {
     window.localStorage.setItem(repoStorageKey, repoSource)
   }, [repoSource])
 
@@ -270,7 +278,7 @@ export default function WorkspacePage() {
     matchedDemoSample,
     repoIndex,
     repoIndexCacheRef.current,
-    sampleRegressionIndexVersion,
+    repoIndexCacheVersion,
   )
   const codeCandidates = buildCodeCandidates(
     selectedParagraph,
@@ -474,6 +482,11 @@ export default function WorkspacePage() {
     setRepoSource(nextSample.repoUrl)
   }
 
+  function cacheRepoIndex(nextIndex: GitHubRepoIndex) {
+    repoIndexCacheRef.current[nextIndex.repoUrl] = nextIndex
+    setRepoIndexCacheVersion((version) => version + 1)
+  }
+
   async function handleIndexRepo(forceRefresh = false) {
     if (repoAnalysis.kind !== 'github') {
       return
@@ -493,7 +506,7 @@ export default function WorkspacePage() {
 
     try {
       const nextIndex = await fetchGitHubRepoIndex(effectiveRepoSource)
-      repoIndexCacheRef.current[effectiveRepoSource] = nextIndex
+      cacheRepoIndex(nextIndex)
       setRepoIndex(nextIndex)
     } catch (indexError: unknown) {
       setRepoIndexError(getErrorMessage(indexError, 'Failed to index this GitHub repository.'))
@@ -519,7 +532,7 @@ export default function WorkspacePage() {
 
       try {
         const nextIndex = await fetchGitHubRepoIndex(sample.repoUrl)
-        repoIndexCacheRef.current[sample.repoUrl] = nextIndex
+        cacheRepoIndex(nextIndex)
         indexedCount += 1
 
         if (sample.id === matchedDemoSample.id && effectiveRepoSource === sample.repoUrl) {
@@ -530,8 +543,6 @@ export default function WorkspacePage() {
         failedSamples.push(sample.label)
       }
     }
-
-    setSampleRegressionIndexVersion((version) => version + 1)
 
     if (failedSamples.length) {
       setSampleRegressionIndexStatus(
