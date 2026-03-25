@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:53 (Asia/Shanghai)  
+最后更新：2026-03-25 20:00 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1741,6 +1741,35 @@ AI 任务拆分为：
 - 继续推进 `M5`：评估 lineage 是否真的需要升级为更深层 tree/history
 - 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
 
+
+### 2026-03-25 20:00 / WP-H code memory helper extraction pass
+
+#### 已完成
+
+- `confirmation memory / rejected count / paragraph decision keys / code-side backlink grouping` helper 开始从 `WorkspacePage` 下沉到 `src/features/code-link/mappings.ts`
+- `WorkspacePage` 现在直接消费这些 selector/grouping helper，而不再维护对应的本地实现
+- 这让 code-link 的“确认记忆 + backlink”不再只是页面局部拼装，而开始成为 feature 层的稳定能力
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `WP-H` 又往前走了一段：snapshot helper、symbol cache helper、regression helper、code memory helper 都已经开始脱离页面层
+- 当前页面层依然大，但最近最常改的 code-link 组织逻辑已经逐步回收到 feature 目录
+- 这一步对后续继续补 confirmation memory 的排序、筛选或导出都更有利，因为边界已经开始收紧
+
+#### 遇到的问题
+
+- 当前 repo index warm-up 触发和部分 UI 状态仍然在页面层
+- mappings 现在同时承载 persistence 和 selector/grouping helper，后续可能还要再拆
+- 还没有把 code-link 的完整 local state 抽成独立 store
+
+#### 下一步
+
+- 继续推进 `WP-H`：评估是否把 repo index warm-up / indexing 状态周边 helper 继续下沉
+- 继续推进 `M5`：评估 lineage 是否真的需要升级为更深层 tree/history
+- 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2135,6 +2164,15 @@ AI 任务拆分为：
 
 - 当前更需要先把推导逻辑从页面里移走，降低后续继续补诊断时的耦合；而 warm-up 的交互状态仍然和工作区 UI 紧密绑定。
 - 先拆 helper 和类型可以最小成本地推进 `WP-H`，后续再看是否真的值得上更重的状态层重构。
+
+### D-044（2026-03-25）
+
+决定：confirmation memory 和 code-side backlink 的当前抽离先收敛到 `mappings.ts`，保持“持久化 + selector/grouping”同模块，而不是立即再拆成新的 memory 文件。
+
+原因：
+
+- 当前这些能力都围绕同一份 `StoredCodeLinkDecision` 结构运作，先放在同一模块内更利于稳定接口和减少来回跳转。
+- 等 code-link 的 memory 交互再长一轮之后，再决定是否值得把 persistence 与 selector 完全拆开，会更稳妥。
 
 ## 16. 当前开放问题
 

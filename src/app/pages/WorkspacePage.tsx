@@ -15,8 +15,12 @@ import {
   type GitHubRepoIndex,
 } from '../../features/code-link/github'
 import {
+  buildCodeBacklinkGroups,
   buildCodeLinkDecision,
+  countRejectedCodeLinkDecisions,
+  getConfirmedCodeLinkDecisions,
   getCandidateDecisionKey,
+  getParagraphDecisionKeys,
   loadStoredCodeLinkDecisions,
   saveStoredCodeLinkDecisions,
   type CodeLinkDecisionKind,
@@ -350,24 +354,15 @@ export default function WorkspacePage() {
     matchedDemoSample,
     repoIndex,
   )
-  const paragraphDecisionKeys = new Set(
-    selectedParagraph
-      ? codeLinkDecisions
-          .filter(
-            (decision) =>
-              decision.repoSource === effectiveRepoSource && decision.paragraphId === selectedParagraph.id,
-          )
-          .map((decision) => decision.candidateKey)
-      : [],
-  )
+  const paragraphDecisionKeys = selectedParagraph
+    ? getParagraphDecisionKeys(codeLinkDecisions, effectiveRepoSource, selectedParagraph.id)
+    : new Set<string>()
   const visibleCodeCandidates = selectedParagraph
     ? codeCandidates.filter(
         (candidate) => !paragraphDecisionKeys.has(getCandidateDecisionKey(candidate, selectedParagraph)),
       )
     : []
-  const repoConfirmedDecisions = codeLinkDecisions.filter(
-    (decision) => decision.repoSource === effectiveRepoSource && decision.decision === 'confirmed',
-  )
+  const repoConfirmedDecisions = getConfirmedCodeLinkDecisions(codeLinkDecisions, effectiveRepoSource)
   const codeBacklinkGroups = buildCodeBacklinkGroups(repoConfirmedDecisions)
   const sampleRegressionPreviews = buildSampleRegressionPreviews(
     selectedParagraph,
@@ -379,12 +374,7 @@ export default function WorkspacePage() {
   )
   const sampleRegressionIndexedCount = sampleRegressionPreviews.filter((preview) => preview.usesIndexedRepo).length
   const paragraphRejectedCount = selectedParagraph
-    ? codeLinkDecisions.filter(
-        (decision) =>
-          decision.repoSource === effectiveRepoSource &&
-          decision.paragraphId === selectedParagraph.id &&
-          decision.decision === 'rejected',
-      ).length
+    ? countRejectedCodeLinkDecisions(codeLinkDecisions, effectiveRepoSource, selectedParagraph.id)
     : 0
   const ideaDocuments = Array.from(new Set(ideas.map((idea) => getIdeaDocumentName(idea)))).sort((left, right) =>
     left.localeCompare(right),
@@ -2663,16 +2653,6 @@ type ContextFieldBlockProps = {
   title: string
 }
 
-type CodeBacklinkGroup = {
-  key: string
-  symbol: string
-  path: string
-  targetUrl?: string
-  lineNumber?: number
-  snippet?: string
-  paragraphs: StoredCodeLinkDecision[]
-}
-
 function ContextFieldBlock({ attribution, body, title }: ContextFieldBlockProps) {
   return (
     <section className="context-card-block">
@@ -2930,57 +2910,4 @@ function deriveSnapshotDocumentName(ideas: StoredIdea[]): string {
 function deriveSnapshotIdeaTags(ideas: StoredIdea[]): IdeaTag[] {
   const tags = Array.from(new Set(ideas.map((idea) => idea.tag)))
   return ideaTags.filter((tag) => tags.includes(tag))
-}
-
-function buildCodeBacklinkGroupKey(decision: StoredCodeLinkDecision): string {
-  return decision.targetUrl ?? `${decision.path}::${decision.symbol}::${decision.lineNumber ?? 'file'}`
-}
-
-function buildCodeBacklinkGroups(decisions: StoredCodeLinkDecision[]): CodeBacklinkGroup[] {
-  const groups = new Map<string, CodeBacklinkGroup>()
-
-  for (const decision of decisions) {
-    const groupKey = buildCodeBacklinkGroupKey(decision)
-    const group = groups.get(groupKey)
-    if (!group) {
-      groups.set(groupKey, {
-        key: groupKey,
-        symbol: decision.symbol,
-        path: decision.path,
-        targetUrl: decision.targetUrl,
-        lineNumber: decision.lineNumber,
-        snippet: decision.snippet,
-        paragraphs: [decision],
-      })
-      continue
-    }
-
-    if (!group.targetUrl && decision.targetUrl) {
-      group.targetUrl = decision.targetUrl
-    }
-
-    if (!group.lineNumber && decision.lineNumber) {
-      group.lineNumber = decision.lineNumber
-    }
-
-    if (!group.snippet && decision.snippet) {
-      group.snippet = decision.snippet
-    }
-
-    if (!group.paragraphs.some((paragraph) => paragraph.paragraphId === decision.paragraphId)) {
-      group.paragraphs.push(decision)
-    }
-  }
-
-  return Array.from(groups.values())
-    .map((group) => ({
-      ...group,
-      paragraphs: [...group.paragraphs].sort((left, right) => left.pageNumber - right.pageNumber),
-    }))
-    .sort(
-      (left, right) =>
-        right.paragraphs.length - left.paragraphs.length ||
-        left.path.localeCompare(right.path) ||
-        (left.lineNumber ?? 0) - (right.lineNumber ?? 0),
-    )
 }

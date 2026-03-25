@@ -25,6 +25,16 @@ export type StoredCodeLinkDecision = {
   createdAt: string
 }
 
+export type CodeBacklinkGroup = {
+  key: string
+  symbol: string
+  path: string
+  targetUrl?: string
+  lineNumber?: number
+  snippet?: string
+  paragraphs: StoredCodeLinkDecision[]
+}
+
 export function buildCodeLinkDecision(
   candidate: CodeCandidate,
   paragraph: ReaderParagraph,
@@ -85,6 +95,87 @@ export function saveStoredCodeLinkDecisions(decisions: StoredCodeLinkDecision[])
   }
 
   window.localStorage.setItem(codeLinkStorageKey, JSON.stringify(decisions))
+}
+
+export function getParagraphDecisionKeys(
+  decisions: StoredCodeLinkDecision[],
+  repoSource: string,
+  paragraphId: string,
+): Set<string> {
+  return new Set(
+    decisions
+      .filter((decision) => decision.repoSource === repoSource && decision.paragraphId === paragraphId)
+      .map((decision) => decision.candidateKey),
+  )
+}
+
+export function getConfirmedCodeLinkDecisions(
+  decisions: StoredCodeLinkDecision[],
+  repoSource: string,
+): StoredCodeLinkDecision[] {
+  return decisions.filter((decision) => decision.repoSource === repoSource && decision.decision === 'confirmed')
+}
+
+export function countRejectedCodeLinkDecisions(
+  decisions: StoredCodeLinkDecision[],
+  repoSource: string,
+  paragraphId: string,
+): number {
+  return decisions.filter(
+    (decision) =>
+      decision.repoSource === repoSource &&
+      decision.paragraphId === paragraphId &&
+      decision.decision === 'rejected',
+  ).length
+}
+
+export function buildCodeBacklinkGroups(decisions: StoredCodeLinkDecision[]): CodeBacklinkGroup[] {
+  const groups = new Map<string, CodeBacklinkGroup>()
+
+  for (const decision of decisions) {
+    const groupKey = decision.targetUrl ?? `${decision.path}::${decision.symbol}::${decision.lineNumber ?? 'file'}`
+    const group = groups.get(groupKey)
+    if (!group) {
+      groups.set(groupKey, {
+        key: groupKey,
+        symbol: decision.symbol,
+        path: decision.path,
+        targetUrl: decision.targetUrl,
+        lineNumber: decision.lineNumber,
+        snippet: decision.snippet,
+        paragraphs: [decision],
+      })
+      continue
+    }
+
+    if (!group.targetUrl && decision.targetUrl) {
+      group.targetUrl = decision.targetUrl
+    }
+
+    if (!group.lineNumber && decision.lineNumber) {
+      group.lineNumber = decision.lineNumber
+    }
+
+    if (!group.snippet && decision.snippet) {
+      group.snippet = decision.snippet
+    }
+
+    if (!group.paragraphs.some((paragraph) => paragraph.paragraphId === decision.paragraphId)) {
+      group.paragraphs.push(decision)
+    }
+  }
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      paragraphs: [...group.paragraphs].sort((left, right) => left.pageNumber - right.pageNumber),
+    }))
+    .sort(
+      (left, right) =>
+        right.paragraphs.length - left.paragraphs.length ||
+        left.path.localeCompare(right.path) ||
+        (left.lineNumber ?? 0) - (right.lineNumber ?? 0),
+    )
 }
 
 function isStoredCodeLinkDecision(value: unknown): value is StoredCodeLinkDecision {
