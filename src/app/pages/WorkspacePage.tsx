@@ -72,6 +72,10 @@ type AssistTab = 'context' | 'code'
 type IdeaTagFilter = IdeaTag | typeof allTagsFilterLabel
 type IdeaTimeFilter = (typeof timeFilters)[number]
 type RepoIndexSource = 'none' | 'cache' | 'network'
+type SampleRegressionDiagnostic = {
+  status: 'cached' | 'refreshed' | 'failed'
+  detail?: string
+}
 type PendingJump = {
   pageNumber: number
   paragraphId: string
@@ -128,6 +132,9 @@ export default function WorkspacePage() {
   const [repoIndexSource, setRepoIndexSource] = useState<RepoIndexSource>('none')
   const [repoIndexCacheVersion, setRepoIndexCacheVersion] = useState(0)
   const [sampleRegressionIndexStatus, setSampleRegressionIndexStatus] = useState<string | null>(null)
+  const [sampleRegressionDiagnostics, setSampleRegressionDiagnostics] = useState<
+    Partial<Record<DemoSampleId, SampleRegressionDiagnostic>>
+  >({})
   const [error, setError] = useState<string | null>(null)
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isIndexingRepo, setIsIndexingRepo] = useState(false)
@@ -318,6 +325,7 @@ export default function WorkspacePage() {
     sampleRegressionRepoIndexes,
     matchedDemoSample,
     repoIndexSource,
+    sampleRegressionDiagnostics,
   )
   const sampleRegressionIndexedCount = sampleRegressionPreviews.filter((preview) => preview.usesIndexedRepo).length
   const paragraphRejectedCount = selectedParagraph
@@ -537,11 +545,16 @@ export default function WorkspacePage() {
     let indexedCount = 0
     let reusedCount = 0
     const failedSamples: string[] = []
+    const nextDiagnostics: Partial<Record<DemoSampleId, SampleRegressionDiagnostic>> = {}
 
     for (const sample of demoSamples) {
       const cachedIndex = repoIndexCacheRef.current[sample.repoUrl]
       if (!forceRefresh && cachedIndex) {
         reusedCount += 1
+        nextDiagnostics[sample.id] = {
+          status: 'cached',
+          detail: `Reused cached index from ${formatRelativeTime(cachedIndex.generatedAt)}.`,
+        }
         continue
       }
 
@@ -549,16 +562,26 @@ export default function WorkspacePage() {
         const nextIndex = await fetchGitHubRepoIndex(sample.repoUrl)
         cacheRepoIndex(nextIndex)
         indexedCount += 1
+        nextDiagnostics[sample.id] = {
+          status: 'refreshed',
+          detail: `Fetched a fresh index at ${formatIdeaTime(nextIndex.generatedAt)}.`,
+        }
 
         if (sample.id === matchedDemoSample.id && effectiveRepoSource === sample.repoUrl) {
           setRepoIndex(nextIndex)
           setRepoIndexError(null)
           setRepoIndexSource('network')
         }
-      } catch {
+      } catch (indexError: unknown) {
         failedSamples.push(sample.label)
+        nextDiagnostics[sample.id] = {
+          status: 'failed',
+          detail: getErrorMessage(indexError, 'Failed to index this sample repository.'),
+        }
       }
     }
+
+    setSampleRegressionDiagnostics(nextDiagnostics)
 
     if (failedSamples.length) {
       setSampleRegressionIndexStatus(
@@ -1474,6 +1497,12 @@ export default function WorkspacePage() {
                             ))}
                           </div>
                         ) : null}
+                        {preview.diagnosticDetail ? (
+                          <p className="repo-analysis-note">{preview.diagnosticDetail}</p>
+                        ) : null}
+                        {preview.refreshHint ? (
+                          <p className="repo-analysis-note">{preview.refreshHint}</p>
+                        ) : null}
                         <p className="candidate-path">
                           {preview.focusMatchCount
                             ? `${preview.focusMatchCount} mapping-focus hits`
@@ -2177,6 +2206,8 @@ type SampleRegressionPreview = {
   candidateCount: number
   usesIndexedRepo: boolean
   cacheSignals: string[]
+  diagnosticDetail?: string
+  refreshHint?: string
 }
 
 function ContextFieldBlock({ attribution, body, title }: ContextFieldBlockProps) {
@@ -2436,6 +2467,42 @@ function buildRepoIndexStatusSignals(index: GitHubRepoIndex, source: RepoIndexSo
   return [sourceLabel, freshness, `updated ${formatRelativeTime(index.generatedAt)}`]
 }
 
+function buildSampleRegressionCacheSignals(
+  index: GitHubRepoIndex | null,
+  source: RepoIndexSource,
+  diagnostic?: SampleRegressionDiagnostic,
+): string[] {
+  const prefix =
+    diagnostic?.status === 'failed'
+      ? ['warm failed']
+      : diagnostic?.status === 'refreshed'
+        ? ['warm refreshed']
+        : diagnostic?.status === 'cached'
+          ? ['warm reused cache']
+          : []
+
+  if (!index) {
+    return [...prefix, 'preset fallback']
+  }
+
+  return [...prefix, ...buildRepoIndexStatusSignals(index, source)]
+}
+
+function buildSampleRegressionRefreshHint(
+  index: GitHubRepoIndex | null,
+  diagnostic?: SampleRegressionDiagnostic,
+): string | undefined {
+  if (diagnostic?.status === 'failed') {
+    return 'Try Refresh Sample Indexes after checking network availability or the upstream repo response.'
+  }
+
+  if (!index) {
+    return 'Warm sample indexes to compare this paragraph against real repo artifacts instead of preset fallbacks.'
+  }
+
+  return undefined
+}
+
 function buildSampleRegressionRepoIndexes(
   matchedDemoSample: DemoSample,
   activeRepoIndex: GitHubRepoIndex | null,
@@ -2465,6 +2532,7 @@ function buildSampleRegressionPreviews(
   sampleRepoIndexes: Partial<Record<DemoSampleId, GitHubRepoIndex>>,
   matchedDemoSample: DemoSample,
   activeRepoIndexSource: RepoIndexSource,
+  diagnostics: Partial<Record<DemoSampleId, SampleRegressionDiagnostic>>,
 ): SampleRegressionPreview[] {
   if (!paragraph) {
     return []
@@ -2472,6 +2540,7 @@ function buildSampleRegressionPreviews(
 
   return demoSamples.map((sample) => {
     const sampleRepoIndex = sampleRepoIndexes[sample.id] ?? null
+    const diagnostic = diagnostics[sample.id]
     const usesIndexedRepo = sampleRepoIndex !== null
     const candidates = buildCodeCandidates(
       paragraph,
@@ -2486,12 +2555,13 @@ function buildSampleRegressionPreviews(
       topCandidate: candidates[0] ?? null,
       candidateCount: candidates.length,
       usesIndexedRepo,
-      cacheSignals: sampleRepoIndex
-        ? buildRepoIndexStatusSignals(
-            sampleRepoIndex,
-            sample.id === matchedDemoSample.id ? activeRepoIndexSource : 'cache',
-          )
-        : ['preset fallback'],
+      cacheSignals: buildSampleRegressionCacheSignals(
+        sampleRepoIndex,
+        sample.id === matchedDemoSample.id ? activeRepoIndexSource : 'cache',
+        diagnostic,
+      ),
+      diagnosticDetail: diagnostic?.detail,
+      refreshHint: buildSampleRegressionRefreshHint(sampleRepoIndex, diagnostic),
     }
   })
 }

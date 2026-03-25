@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 18:20 (Asia/Shanghai)  
+最后更新：2026-03-25 18:49 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1265,6 +1265,35 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否给 sample regression 增加更直接的失败详情与刷新建议
 - 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
 
+
+### 2026-03-25 18:49 / Phase 4 regression diagnostics pass
+
+#### 已完成
+
+- `Cross-sample Regression` 开始记录并展示 per-sample 的索引结果状态，而不是只保留顶部汇总消息
+- warm 流程现在会区分 `cached / refreshed / failed`，并把简短 detail 写回对应 sample 卡片
+- 回归卡片现在会在需要时直接给出刷新建议，避免用户只知道“失败了”却不知道下一步
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里关于 sample regression 的失败详情与刷新建议已经开始落地，回归区比之前更像真实可调试工作区
+- 当前多 sample 索引链路不再只有成功路径可见，失败路径也已经开始有最小反馈
+- 这一步继续遵守当前的轻量原型原则：补的是诊断层，不是复杂监控面板
+
+#### 遇到的问题
+
+- 当前 diagnostics 仍停留在本次会话内，不做更长期的历史统计
+- per-sample detail 还是简短文本，不是结构化错误分类
+- 失败建议目前是通用提示，还没有根据具体错误类型给出差异化建议
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否把 symbol cache 进一步并入 repo index 的持久化结构
+- 继续推进 `M4`：评估是否把 regression diagnostics 做成更明确的错误类型与刷新建议
+- 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1515,6 +1544,15 @@ AI 任务拆分为：
 
 - 当前更需要先统一 candidate generation 与 repo preview 的解析逻辑，避免两套实现漂移。
 - 在 symbol cache 的字段和交互还在收敛时，先保持为派生层比过早固化到持久化结构更稳妥。
+
+### D-028（2026-03-25）
+
+决定：sample regression 的第一轮 diagnostics 先采用 per-sample 轻量 detail + refresh hint，而不是立即做结构化错误面板。
+
+原因：
+
+- 当前更需要的是让失败路径“能看见、能继续操作”，而不是把诊断界面做成新的复杂子系统。
+- 这种轻量诊断已经足够覆盖当前 warm sample indexes 的主要交互需求，并能继续低成本迭代。
 
 ## 16. 当前开放问题
 
