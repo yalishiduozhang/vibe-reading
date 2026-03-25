@@ -397,6 +397,9 @@ export default function WorkspacePage() {
   const activeSnapshotCount = composerSnapshots.filter((snapshot) => !snapshot.archivedAt).length
   const archivedSnapshotCount = composerSnapshots.filter((snapshot) => Boolean(snapshot.archivedAt)).length
   const expandedSnapshot = composerSnapshots.find((snapshot) => snapshot.id === expandedSnapshotId) ?? null
+  const expandedSnapshotComparison = expandedSnapshot
+    ? buildSnapshotComparisonSummary(expandedSnapshot, selectedIdeaIds, draftMode, composerMarkdown)
+    : null
   const filteredComposerSnapshots = composerSnapshots
     .filter((snapshot) => matchesSnapshotSearch(snapshot, snapshotSearchQuery))
     .filter(
@@ -2331,6 +2334,18 @@ export default function WorkspacePage() {
                   {expandedSnapshot.archivedAt ? (
                     <p className="repo-analysis-note">{`Archived ${formatIdeaTime(expandedSnapshot.archivedAt)}`}</p>
                   ) : null}
+                  {expandedSnapshotComparison ? (
+                    <>
+                      <div className="repo-signal-list">
+                        {expandedSnapshotComparison.signals.map((signal) => (
+                          <span key={`${expandedSnapshot.id}-${signal}`} className="repo-signal-item">
+                            {signal}
+                          </span>
+                        ))}
+                      </div>
+                      <p className="repo-analysis-note">{expandedSnapshotComparison.note}</p>
+                    </>
+                  ) : null}
                   <div className="candidate-actions">
                     <button
                       className="ghost-button ghost-button-small"
@@ -2521,6 +2536,11 @@ type SampleRegressionPreview = {
   cacheSignals: string[]
   diagnosticDetail?: string
   refreshHint?: string
+}
+
+type SnapshotComparisonSummary = {
+  note: string
+  signals: string[]
 }
 
 function ContextFieldBlock({ attribution, body, title }: ContextFieldBlockProps) {
@@ -2740,6 +2760,49 @@ function buildDuplicateSnapshotName(
   }
 
   return `${baseName} (copy ${duplicateIndex})`
+}
+
+function buildSnapshotComparisonSummary(
+  snapshot: StoredComposerSnapshot,
+  activeSelectedIdeaIds: string[],
+  activeDraftMode: DraftMode,
+  activeMarkdown: string,
+): SnapshotComparisonSummary {
+  if (!activeSelectedIdeaIds.length && !activeMarkdown.trim()) {
+    return {
+      note: 'No active draft is loaded in the composer, so this snapshot is currently being viewed on its own.',
+      signals: ['no active draft loaded'],
+    }
+  }
+
+  const snapshotSelection = new Set(snapshot.selectedIdeaIds)
+  const activeSelection = new Set(activeSelectedIdeaIds)
+  const sharedSelectionCount = activeSelectedIdeaIds.filter((ideaId) => snapshotSelection.has(ideaId)).length
+  const selectionExactMatch =
+    sharedSelectionCount === snapshot.selectedIdeaIds.length && snapshot.selectedIdeaIds.length === activeSelection.size
+  const modeExactMatch = snapshot.draftMode === activeDraftMode
+  const markdownExactMatch = snapshot.markdown.trim() === activeMarkdown.trim()
+  const snapshotLineCount = snapshot.markdown.trim() ? snapshot.markdown.trim().split('\n').length : 0
+  const activeLineCount = activeMarkdown.trim() ? activeMarkdown.trim().split('\n').length : 0
+  const lineDelta = snapshotLineCount - activeLineCount
+
+  const signals = [
+    selectionExactMatch
+      ? 'selection: exact match'
+      : `selection: ${sharedSelectionCount}/${snapshot.selectedIdeaIds.length} snapshot ideas shared`,
+    modeExactMatch ? `mode: same (${snapshot.draftMode})` : `mode: ${snapshot.draftMode} vs ${activeDraftMode}`,
+    markdownExactMatch
+      ? `markdown: exact match (${snapshotLineCount} lines)`
+      : `markdown: ${lineDelta >= 0 ? '+' : ''}${lineDelta} lines vs active`,
+  ]
+
+  return {
+    note:
+      selectionExactMatch && modeExactMatch && markdownExactMatch
+        ? 'This snapshot currently matches the active composer draft.'
+        : 'This snapshot differs from the active composer draft in at least one of selection, mode, or markdown size.',
+    signals,
+  }
 }
 
 function matchesIdeaSearch(idea: StoredIdea, rawQuery: string): boolean {

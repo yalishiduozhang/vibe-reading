@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:20 (Asia/Shanghai)  
+最后更新：2026-03-25 19:22 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1533,6 +1533,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否要给 `All cached` 增加更明确的排序方式
 - 继续推进 `WP-H`：评估是否把 snapshot/detail 操作进一步下沉出页面层
 
+
+### 2026-03-25 19:22 / Phase 5 snapshot compare summary pass
+
+#### 已完成
+
+- snapshot detail card 现在会和当前 active composer draft 做最小 comparison summary
+- 当前 comparison 会直接显示 selection overlap、draft mode 是否一致，以及 markdown 行数差异
+- 如果当前没有 active draft，detail card 也会明确提示这是单独浏览状态，而不是静默缺省
+- 这让 snapshot detail 不再只是静态内容查看，而开始具备最小 compare 能力
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M5` 已经从“可查看、可复制”继续推进到“可快速对照 active draft”，snapshot 的实体感更强
+- 当前 compare 仍然是轻量 summary，而不是复杂 diff，但已经足够帮助用户判断要不要 load / duplicate /继续改
+- 这一步为后续是否要做真正 compare view 提供了低成本验证路径
+
+#### 遇到的问题
+
+- 当前 comparison 仍是 summary，不显示具体哪几行变化
+- 还没有 parent/derived 元数据，因此 compare 仍然只针对“当前 active draft”
+- markdown 差异目前只展示行数变化，不是更细的 section-level 对比
+
+#### 下一步
+
+- 继续推进 `M5`：评估是否要为 snapshot 增加 parent/derived 关系或更明确的 compare 视图
+- 继续推进 `M4`：评估是否要给 `All cached` 增加更明确的排序方式
+- 继续推进 `WP-H`：评估是否把 snapshot/detail 操作进一步下沉出页面层
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1864,6 +1894,15 @@ AI 任务拆分为：
 
 - `Duplicate` 已经能覆盖当前最常见的“在现有草稿基础上继续分叉”需求，成本比直接做版本关系系统低很多。
 - 先把复制与继续编辑路径跑通，再决定是否真的需要 parent/derived 元数据和 compare 视图，更符合当前原型验证节奏。
+
+### D-037（2026-03-25）
+
+决定：snapshot 的第一轮 compare 能力先采用 detail card 内的轻量 summary，对照当前 active draft，而不是立即实现完整 diff 视图。
+
+原因：
+
+- 当前更需要回答的是“这个 snapshot 和我手上的 draft 差多少，值不值得 load/duplicate”，summary 已经足够支撑这个判断。
+- 先做轻量 compare 可以验证真实使用频率，再决定是否值得继续投入更重的 diff/版本关系实现。
 
 ## 16. 当前开放问题
 
