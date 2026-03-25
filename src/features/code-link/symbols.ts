@@ -1,5 +1,7 @@
 import type { GitHubRepoFile, GitHubRepoIndex } from './github'
 
+export const repoSymbolCacheSortModes = ['Best match', 'Path A-Z', 'Symbol A-Z', 'Line number'] as const
+
 export type ExtractedCodeSymbol = {
   name: string
   lineNumber: number
@@ -19,6 +21,8 @@ export type RankedRepoSymbolCacheEntry = RepoSymbolCacheEntry & {
   score: number
   signals: string[]
 }
+
+export type RepoSymbolCacheSortMode = (typeof repoSymbolCacheSortModes)[number]
 
 export function buildRepoSymbolCache(
   repoIndex: GitHubRepoIndex,
@@ -197,6 +201,55 @@ export function splitSymbolTokens(name: string): string[] {
     .toLowerCase()
     .split(/\s+/)
     .filter((token) => token.length > 2)
+}
+
+export function sortRepoSymbolCacheEntries(
+  entries: RankedRepoSymbolCacheEntry[],
+  sortMode: RepoSymbolCacheSortMode,
+): RankedRepoSymbolCacheEntry[] {
+  return [...entries].sort((left, right) => {
+    if (sortMode === 'Path A-Z') {
+      return (
+        left.path.localeCompare(right.path) ||
+        left.symbol.localeCompare(right.symbol) ||
+        left.lineNumber - right.lineNumber
+      )
+    }
+
+    if (sortMode === 'Symbol A-Z') {
+      return (
+        left.symbol.localeCompare(right.symbol) ||
+        left.path.localeCompare(right.path) ||
+        left.lineNumber - right.lineNumber
+      )
+    }
+
+    if (sortMode === 'Line number') {
+      return (
+        left.lineNumber - right.lineNumber ||
+        left.path.localeCompare(right.path) ||
+        left.symbol.localeCompare(right.symbol)
+      )
+    }
+
+    return (
+      right.score - left.score ||
+      left.path.localeCompare(right.path) ||
+      left.symbol.localeCompare(right.symbol) ||
+      left.lineNumber - right.lineNumber
+    )
+  })
+}
+
+export function matchesRepoSymbolCacheEntry(entry: RepoSymbolCacheEntry, rawQuery: string): boolean {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) {
+    return true
+  }
+
+  return [entry.symbol, entry.path, entry.fileName, entry.snippet ?? ''].some((field) =>
+    field.toLowerCase().includes(query),
+  )
 }
 
 function extractFocusTerms(text: string): string[] {

@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:31 (Asia/Shanghai)  
+最后更新：2026-03-25 19:34 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1652,6 +1652,35 @@ AI 任务拆分为：
 - 继续推进 `M5`：评估是否真的需要更重的 lineage/tree 视图
 - 继续推进 `M4`：继续收敛 repo cache helper 的边界
 
+
+### 2026-03-25 19:34 / WP-H symbol cache helper extraction pass
+
+#### 已完成
+
+- `symbol cache` 的 `sort mode / query match / list ordering` helper 开始从 `WorkspacePage` 下沉到 `src/features/code-link/symbols.ts`
+- `WorkspacePage` 现在只保留 symbol cache 的 view state 和 UI 控件，不再定义这层 helper 细节
+- 这让 `M4` 刚补出来的轻量 cache browser 开始真正形成 feature 级能力，而不是继续固化为页面私有逻辑
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `WP-H` 又往前走了一步：snapshot helper 和 symbol cache helper 都已经开始往 feature 层回收
+- 当前 `WorkspacePage` 仍然偏大，但最近新增的两条能力链已经不再全部堆在页面底部
+- 这一步也让后续继续调 symbol cache 浏览行为时，不需要反复在页面里找局部 helper
+
+#### 遇到的问题
+
+- 当前 repo index diagnostics 和 sample regression helper 仍然主要留在页面层
+- `symbols.ts` 现在同时承担 symbol 提取和 cache browser helper，后续可能还要再拆
+- 页面状态本身还没有进入更独立的 reducer/store 结构
+
+#### 下一步
+
+- 继续推进 `WP-H`：评估是否把 repo index / regression diagnostics helper 继续下沉
+- 继续推进 `M5`：评估是否真的需要更重的 lineage/tree 视图
+- 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2019,6 +2048,15 @@ AI 任务拆分为：
 
 - 当前更需要的是优先把最近增长最快的 snapshot entity 逻辑从页面里剥离出来，降低继续演化时的耦合。
 - 先拆 helper 比直接大改状态层更稳，可以在持续交付功能的同时逐步清理页面边界。
+
+### D-041（2026-03-25）
+
+决定：symbol cache 的 browse helper 暂时继续收敛到 `symbols.ts`，先和 symbol extraction 保持同一 feature 模块，而不是立即再拆成新的 cache-browser 文件。
+
+原因：
+
+- 当前这几类 helper 都围绕同一份 `RepoSymbolCacheEntry` 结构运作，先放在一起更利于快速稳定接口。
+- 等 repo cache browser 的行为再长一轮之后，再判断是否值得进一步拆成独立模块，会更稳妥。
 
 ## 16. 当前开放问题
 

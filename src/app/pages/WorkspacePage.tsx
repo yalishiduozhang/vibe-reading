@@ -29,7 +29,11 @@ import {
   saveStoredRepoIndexCache,
 } from '../../features/code-link/storage'
 import {
+  matchesRepoSymbolCacheEntry,
   rankRepoSymbolCacheEntries,
+  repoSymbolCacheSortModes,
+  sortRepoSymbolCacheEntries,
+  type RepoSymbolCacheSortMode,
   type RankedRepoSymbolCacheEntry,
   type RepoSymbolCacheEntry,
 } from '../../features/code-link/symbols'
@@ -75,7 +79,6 @@ const allSnapshotPapersFilterLabel = 'All snapshot papers'
 const allTagsFilterLabel = 'All tags'
 const snapshotVisibilityFilters = ['All snapshots', 'Active only', 'Archived only'] as const
 const symbolCacheViewModes = ['Focused hits', 'All cached'] as const
-const symbolCacheSortModes = ['Best match', 'Path A-Z', 'Symbol A-Z', 'Line number'] as const
 const timeFilters = ['All time', 'Last 24h', 'Last 7d'] as const
 
 type AssistTab = 'context' | 'code'
@@ -83,7 +86,6 @@ type IdeaTagFilter = IdeaTag | typeof allTagsFilterLabel
 type IdeaTimeFilter = (typeof timeFilters)[number]
 type SnapshotVisibilityFilter = (typeof snapshotVisibilityFilters)[number]
 type SymbolCacheViewMode = (typeof symbolCacheViewModes)[number]
-type SymbolCacheSortMode = (typeof symbolCacheSortModes)[number]
 type RepoIndexSource = 'none' | 'cache' | 'network'
 type SampleRegressionDiagnosticReason = 'network' | 'not-found' | 'rate-limit' | 'unsupported' | 'unknown'
 type SampleRegressionDiagnostic = {
@@ -153,7 +155,7 @@ export default function WorkspacePage() {
   const [repoIndexCacheVersion, setRepoIndexCacheVersion] = useState(0)
   const [symbolCacheSearchQuery, setSymbolCacheSearchQuery] = useState('')
   const [symbolCacheViewMode, setSymbolCacheViewMode] = useState<SymbolCacheViewMode>('Focused hits')
-  const [symbolCacheSortMode, setSymbolCacheSortMode] = useState<SymbolCacheSortMode>('Best match')
+  const [symbolCacheSortMode, setSymbolCacheSortMode] = useState<RepoSymbolCacheSortMode>('Best match')
   const [isSymbolCacheExpanded, setIsSymbolCacheExpanded] = useState(false)
   const [sampleRegressionIndexStatus, setSampleRegressionIndexStatus] = useState<string | null>(null)
   const [sampleRegressionDiagnostics, setSampleRegressionDiagnostics] = useState<
@@ -1584,10 +1586,10 @@ export default function WorkspacePage() {
                                 <select
                                   value={symbolCacheSortMode}
                                   onChange={(event) =>
-                                    setSymbolCacheSortMode(event.target.value as SymbolCacheSortMode)
+                                    setSymbolCacheSortMode(event.target.value as RepoSymbolCacheSortMode)
                                   }
                                 >
-                                  {symbolCacheSortModes.map((mode) => (
+                                  {repoSymbolCacheSortModes.map((mode) => (
                                     <option key={mode} value={mode}>
                                       {mode}
                                     </option>
@@ -2780,44 +2782,6 @@ function getSnapshotTagSummary(snapshot: StoredComposerSnapshot): string {
   return snapshot.ideaTags.join(', ')
 }
 
-function sortRepoSymbolCacheEntries(
-  entries: RankedRepoSymbolCacheEntry[],
-  sortMode: SymbolCacheSortMode,
-): RankedRepoSymbolCacheEntry[] {
-  return [...entries].sort((left, right) => {
-    if (sortMode === 'Path A-Z') {
-      return (
-        left.path.localeCompare(right.path) ||
-        left.symbol.localeCompare(right.symbol) ||
-        left.lineNumber - right.lineNumber
-      )
-    }
-
-    if (sortMode === 'Symbol A-Z') {
-      return (
-        left.symbol.localeCompare(right.symbol) ||
-        left.path.localeCompare(right.path) ||
-        left.lineNumber - right.lineNumber
-      )
-    }
-
-    if (sortMode === 'Line number') {
-      return (
-        left.lineNumber - right.lineNumber ||
-        left.path.localeCompare(right.path) ||
-        left.symbol.localeCompare(right.symbol)
-      )
-    }
-
-    return (
-      right.score - left.score ||
-      left.path.localeCompare(right.path) ||
-      left.symbol.localeCompare(right.symbol) ||
-      left.lineNumber - right.lineNumber
-    )
-  })
-}
-
 function matchesIdeaSearch(idea: StoredIdea, rawQuery: string): boolean {
   const query = rawQuery.trim().toLowerCase()
   if (!query) {
@@ -2846,17 +2810,6 @@ function matchesSnapshotSearch(snapshot: StoredComposerSnapshot, rawQuery: strin
     snapshot.note ?? '',
     ...(snapshot.ideaTags ?? []),
   ].some((field) => field.toLowerCase().includes(query))
-}
-
-function matchesRepoSymbolCacheEntry(entry: RepoSymbolCacheEntry, rawQuery: string): boolean {
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) {
-    return true
-  }
-
-  return [entry.symbol, entry.path, entry.fileName, entry.snippet ?? ''].some((field) =>
-    field.toLowerCase().includes(query),
-  )
 }
 
 function matchesSnapshotVisibility(
