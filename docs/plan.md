@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 20:00 (Asia/Shanghai)  
+最后更新：2026-03-25 20:05 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1770,6 +1770,36 @@ AI 任务拆分为：
 - 继续推进 `M5`：评估 lineage 是否真的需要升级为更深层 tree/history
 - 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
 
+
+### 2026-03-25 20:05 / WP-H repo indexing helper extraction pass
+
+#### 已完成
+
+- 新增 `src/features/code-link/indexing.ts`
+- repo index 的 `cache read / cache write / warm diagnostic copy / warm status summary` helper 开始从 `WorkspacePage` 下沉到 feature 层
+- `WorkspacePage` 现在继续负责触发 indexing 和 warm-up，但不再直接维护这些缓存与状态文案 helper
+- 这让 repo indexing 不再只是页面里的临时逻辑，而开始形成更明确的 code-link 子模块边界
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `WP-H` 又往前推进了一步：snapshot、symbol cache、regression、code memory、repo indexing 这几段增长最快的 helper 都已经开始回收到 feature 层
+- 当前页面层仍然承担大量状态协调，但索引链路的本地逻辑已经没有继续全部堆在页面里
+- 这一步也让后续继续调 warm-up 文案、缓存行为和 repo index 接线时更稳，因为边界开始更清楚
+
+#### 遇到的问题
+
+- 当前真正的 indexing 状态机和异步触发仍然在页面层
+- `indexing.ts` 目前主要承载 cache/warm helper，还没有覆盖更完整的 index-flow orchestration
+- repo index 与 regression/status helper 目前还分布在 `indexing.ts` 和 `regression.ts` 两个文件，后续还需要再观察是否要合并或细拆
+
+#### 下一步
+
+- 继续推进 `WP-H`：评估是否把 repo indexing 的异步触发与状态协调继续下沉
+- 继续推进 `M5`：评估 lineage 是否真的需要升级为更深层 tree/history
+- 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2173,6 +2203,15 @@ AI 任务拆分为：
 
 - 当前这些能力都围绕同一份 `StoredCodeLinkDecision` 结构运作，先放在同一模块内更利于稳定接口和减少来回跳转。
 - 等 code-link 的 memory 交互再长一轮之后，再决定是否值得把 persistence 与 selector 完全拆开，会更稳妥。
+
+### D-045（2026-03-25）
+
+决定：repo indexing 的当前抽离先以 `indexing.ts` 承担 cache 与 warm-up helper 为主，不立即把完整异步流程一起抽出页面层。
+
+原因：
+
+- 当前更需要优先降低页面里关于 repo cache 和 warm 文案的耦合，而异步触发流程仍然紧贴工作区的按钮和状态展示。
+- 先拆 helper 能保持连续交付节奏，同时为后续是否继续抽 indexing controller/store 留出空间。
 
 ## 16. 当前开放问题
 

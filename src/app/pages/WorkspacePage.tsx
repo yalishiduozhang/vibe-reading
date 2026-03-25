@@ -15,6 +15,13 @@ import {
   type GitHubRepoIndex,
 } from '../../features/code-link/github'
 import {
+  buildCachedSampleRegressionDiagnostic,
+  buildRefreshedSampleRegressionDiagnostic,
+  buildSampleRegressionWarmStatus,
+  getCachedRepoIndex,
+  storeRepoIndexInCache,
+} from '../../features/code-link/indexing'
+import {
   buildCodeBacklinkGroups,
   buildCodeLinkDecision,
   countRejectedCodeLinkDecisions,
@@ -35,7 +42,6 @@ import {
   type SampleRegressionDiagnostic,
 } from '../../features/code-link/regression'
 import {
-  enrichRepoIndex,
   loadStoredRepoIndexCache,
   saveStoredRepoIndexCache,
 } from '../../features/code-link/storage'
@@ -505,7 +511,7 @@ export default function WorkspacePage() {
       return
     }
 
-    const cachedIndex = repoIndexCacheRef.current[effectiveRepoSource] ?? null
+    const cachedIndex = getCachedRepoIndex(repoIndexCacheRef.current, effectiveRepoSource)
     setRepoIndex(cachedIndex)
     setRepoIndexError(null)
     setRepoIndexSource(cachedIndex ? 'cache' : 'none')
@@ -561,8 +567,7 @@ export default function WorkspacePage() {
   }
 
   function cacheRepoIndex(nextIndex: GitHubRepoIndex) {
-    const normalizedIndex = enrichRepoIndex(nextIndex)
-    repoIndexCacheRef.current[normalizedIndex.repoUrl] = normalizedIndex
+    const normalizedIndex = storeRepoIndexInCache(repoIndexCacheRef.current, nextIndex)
     setRepoIndexCacheVersion((version) => version + 1)
     return normalizedIndex
   }
@@ -573,7 +578,7 @@ export default function WorkspacePage() {
     }
 
     if (!forceRefresh) {
-      const cachedIndex = repoIndexCacheRef.current[effectiveRepoSource]
+      const cachedIndex = getCachedRepoIndex(repoIndexCacheRef.current, effectiveRepoSource)
       if (cachedIndex) {
         setRepoIndex(cachedIndex)
         setRepoIndexError(null)
@@ -606,23 +611,17 @@ export default function WorkspacePage() {
     const nextDiagnostics: Partial<Record<DemoSampleId, SampleRegressionDiagnostic>> = {}
 
     for (const sample of demoSamples) {
-      const cachedIndex = repoIndexCacheRef.current[sample.repoUrl]
+      const cachedIndex = getCachedRepoIndex(repoIndexCacheRef.current, sample.repoUrl)
       if (!forceRefresh && cachedIndex) {
         reusedCount += 1
-        nextDiagnostics[sample.id] = {
-          status: 'cached',
-          detail: `Reused cached index from ${formatRelativeTime(cachedIndex.generatedAt)}.`,
-        }
+        nextDiagnostics[sample.id] = buildCachedSampleRegressionDiagnostic(cachedIndex, formatRelativeTime)
         continue
       }
 
       try {
         const nextIndex = cacheRepoIndex(await fetchGitHubRepoIndex(sample.repoUrl))
         indexedCount += 1
-        nextDiagnostics[sample.id] = {
-          status: 'refreshed',
-          detail: `Fetched a fresh index at ${formatIdeaTime(nextIndex.generatedAt)}.`,
-        }
+        nextDiagnostics[sample.id] = buildRefreshedSampleRegressionDiagnostic(nextIndex, formatIdeaTime)
 
         if (sample.id === matchedDemoSample.id && effectiveRepoSource === sample.repoUrl) {
           setRepoIndex(nextIndex)
@@ -641,16 +640,7 @@ export default function WorkspacePage() {
     }
 
     setSampleRegressionDiagnostics(nextDiagnostics)
-
-    if (failedSamples.length) {
-      setSampleRegressionIndexStatus(
-        `Indexed ${indexedCount} sample repos, reused ${reusedCount}, failed: ${failedSamples.join(', ')}.`,
-      )
-    } else if (indexedCount || reusedCount) {
-      setSampleRegressionIndexStatus(`Indexed ${indexedCount} sample repos and reused ${reusedCount} cached indexes.`)
-    } else {
-      setSampleRegressionIndexStatus('No sample indexes were updated.')
-    }
+    setSampleRegressionIndexStatus(buildSampleRegressionWarmStatus(indexedCount, reusedCount, failedSamples))
 
     setIsIndexingSampleRegression(false)
   }
