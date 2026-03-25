@@ -11,6 +11,7 @@ import {
   getAiProviderLabel,
   getDefaultAiBaseUrl,
   loadStoredAiConfig,
+  normalizeAiBaseUrl,
   saveStoredAiConfig,
   type AiProviderKind,
   type AiResponseLanguage,
@@ -195,6 +196,13 @@ export default function WorkspacePage() {
   const [isExpandingComposerWithAi, setIsExpandingComposerWithAi] = useState(false)
   const restoredComposerSelectionKeyRef = useRef(loadStoredComposerDraft()?.selectionKey ?? '')
   const pendingSnapshotLoadRef = useRef<StoredComposerSnapshot | null>(null)
+  const latestAiContextKeyRef = useRef('')
+  const latestComposerStateRef = useRef({
+    selectionKey: '',
+    markdown: '',
+  })
+  const contextRequestIdRef = useRef(0)
+  const composerExpansionRequestIdRef = useRef(0)
 
   useEffect(() => {
     let isActive = true
@@ -460,6 +468,11 @@ export default function WorkspacePage() {
     Boolean(documentProxy) &&
     (pageSnapshot?.pageNumber !== currentPage || renderedIntent !== intent)
   const isComposerDirty = selectedIdeas.length > 0 && composerMarkdown !== ideaDraft.markdown
+  latestAiContextKeyRef.current = aiContextCacheKey
+  latestComposerStateRef.current = {
+    selectionKey: composerSelectionKey,
+    markdown: composerMarkdown,
+  }
 
   useEffect(() => {
     if (!ideaDocuments.includes(ideaDocumentFilter) && ideaDocumentFilter !== allPapersFilterLabel) {
@@ -613,22 +626,32 @@ export default function WorkspacePage() {
       return
     }
 
+    contextRequestIdRef.current += 1
+    const requestId = contextRequestIdRef.current
+    const requestCacheKey = buildAiContextCacheKey(selectedParagraph, intent, aiConfig)
+
     setIsGeneratingContext(true)
     setContextStatus(null)
 
     try {
       const nextContextCard = await generateAiContextCard(selectedParagraph, intent, aiConfig)
-      const nextCacheKey = buildAiContextCacheKey(selectedParagraph, intent, aiConfig)
 
       setGeneratedContextCards((currentCards) => ({
         ...currentCards,
-        [nextCacheKey]: nextContextCard,
+        [requestCacheKey]: nextContextCard,
       }))
-      setContextStatus(`Generated live context with ${nextContextCard.providerLabel ?? aiProviderLabel}.`)
+
+      if (contextRequestIdRef.current === requestId && latestAiContextKeyRef.current === requestCacheKey) {
+        setContextStatus(`Generated live context with ${nextContextCard.providerLabel ?? aiProviderLabel}.`)
+      }
     } catch (contextError: unknown) {
-      setContextStatus(getErrorMessage(contextError, 'Failed to generate live AI context.'))
+      if (contextRequestIdRef.current === requestId && latestAiContextKeyRef.current === requestCacheKey) {
+        setContextStatus(getErrorMessage(contextError, 'Failed to generate live AI context.'))
+      }
     } finally {
-      setIsGeneratingContext(false)
+      if (contextRequestIdRef.current === requestId) {
+        setIsGeneratingContext(false)
+      }
     }
   }
 
@@ -923,6 +946,11 @@ export default function WorkspacePage() {
       return
     }
 
+    composerExpansionRequestIdRef.current += 1
+    const requestId = composerExpansionRequestIdRef.current
+    const requestSelectionKey = composerSelectionKey
+    const requestMarkdown = composerMarkdown
+
     setIsExpandingComposerWithAi(true)
     setComposerStatus(null)
 
@@ -934,12 +962,24 @@ export default function WorkspacePage() {
         currentMarkdown: composerMarkdown,
       })
 
-      setComposerMarkdown(nextMarkdown)
-      setComposerStatus(`Expanded draft with ${aiProviderLabel}.`)
+      if (
+        composerExpansionRequestIdRef.current === requestId &&
+        latestComposerStateRef.current.selectionKey === requestSelectionKey &&
+        latestComposerStateRef.current.markdown === requestMarkdown
+      ) {
+        setComposerMarkdown(nextMarkdown)
+        setComposerStatus(`Expanded draft with ${aiProviderLabel}.`)
+      } else if (composerExpansionRequestIdRef.current === requestId) {
+        setComposerStatus('Skipped AI expansion because the draft changed while the request was running.')
+      }
     } catch (expansionError: unknown) {
-      setComposerStatus(getErrorMessage(expansionError, 'Failed to expand the draft with AI.'))
+      if (composerExpansionRequestIdRef.current === requestId) {
+        setComposerStatus(getErrorMessage(expansionError, 'Failed to expand the draft with AI.'))
+      }
     } finally {
-      setIsExpandingComposerWithAi(false)
+      if (composerExpansionRequestIdRef.current === requestId) {
+        setIsExpandingComposerWithAi(false)
+      }
     }
   }
 
@@ -2978,13 +3018,17 @@ function buildAiContextCacheKey(
     intent,
     config.provider,
     config.responseLanguage,
-    config.baseUrl.trim().toLowerCase(),
+    normalizeAiBaseUrl(config.baseUrl).toLowerCase(),
     config.model.trim().toLowerCase(),
+    String(config.temperature),
   ].join('::')
 }
 
 function shouldResetAiBaseUrl(config: StoredAiConfig): boolean {
-  return !config.baseUrl.trim() || config.baseUrl.trim() === getDefaultAiBaseUrl(config.provider)
+  return (
+    !normalizeAiBaseUrl(config.baseUrl) ||
+    normalizeAiBaseUrl(config.baseUrl) === normalizeAiBaseUrl(getDefaultAiBaseUrl(config.provider))
+  )
 }
 
 function loadStoredRepo(): string {

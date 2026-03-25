@@ -57,7 +57,7 @@ export function saveStoredAiConfig(config: StoredAiConfig) {
 export function normalizeAiConfig(config: StoredAiConfig): StoredAiConfig {
   return {
     provider: config.provider,
-    baseUrl: config.baseUrl.trim(),
+    baseUrl: normalizeAiBaseUrl(config.baseUrl),
     model: config.model.trim(),
     apiKey: config.apiKey.trim(),
     responseLanguage: config.responseLanguage,
@@ -99,7 +99,20 @@ export function getAiConfigIssue(config: StoredAiConfig): string | null {
     return 'Set a model name before sending live AI requests.'
   }
 
+  if (config.provider === 'openai-compatible' && isOfficialOpenAiBaseUrl(config.baseUrl) && !config.apiKey.trim()) {
+    return 'Set an API key before using the official OpenAI-compatible endpoint.'
+  }
+
   return null
+}
+
+export function normalizeAiBaseUrl(baseUrl: string): string {
+  return baseUrl.trim().replace(/\/+$/, '')
+}
+
+export function isOfficialOpenAiBaseUrl(baseUrl: string): boolean {
+  const normalized = normalizeAiBaseUrl(baseUrl).toLowerCase()
+  return normalized === 'https://api.openai.com/v1'
 }
 
 function clampTemperature(value: number): number {

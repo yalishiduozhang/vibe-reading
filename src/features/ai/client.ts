@@ -1,4 +1,4 @@
-import type { StoredAiConfig } from './storage'
+import { normalizeAiBaseUrl, type StoredAiConfig } from './storage'
 
 export type AiChatMessage = {
   role: 'system' | 'user'
@@ -38,16 +38,12 @@ export async function requestAiText(
   return requestOpenAiCompatibleText(config, messages, options)
 }
 
-function normalizeBaseUrl(baseUrl: string): string {
-  return baseUrl.trim().replace(/\/+$/, '')
-}
-
 async function requestOpenAiCompatibleText(
   config: StoredAiConfig,
   messages: AiChatMessage[],
   options: RequestAiTextOptions,
 ): Promise<string> {
-  const endpoint = `${normalizeBaseUrl(config.baseUrl)}/chat/completions`
+  const endpoint = `${normalizeAiBaseUrl(config.baseUrl)}/chat/completions`
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
@@ -106,7 +102,7 @@ async function requestOllamaText(
   messages: AiChatMessage[],
   options: RequestAiTextOptions,
 ): Promise<string> {
-  const endpoint = `${normalizeBaseUrl(config.baseUrl)}/api/chat`
+  const endpoint = `${normalizeAiBaseUrl(config.baseUrl)}/api/chat`
   const response = await fetch(endpoint, {
     method: 'POST',
     headers: {

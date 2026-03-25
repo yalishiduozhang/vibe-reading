@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 20:21 (Asia/Shanghai)  
+最后更新：2026-03-25 20:29 (Asia/Shanghai)  
 当前阶段：Phase 3 completed + Phase 4 in progress + Phase 5 in progress + WP-H in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1867,6 +1867,38 @@ AI 任务拆分为：
 - 继续推进 `M4`：在 Phase 3 已收口后，把主火力重新放回 repo bridge、local path 方案与 code-link 深度
 - 继续推进 `M5`：判断当前 snapshot library 是否足够，还是升级为正式 draft entity
 
+
+### 2026-03-25 20:29 / Verification pass + AI reliability hardening
+
+#### 已完成
+
+- 对当前已完成功能做了一轮严谨检查，重点复核 live AI assist、composer AI 扩写、provider 配置切换和缓存键边界
+- 修复 AI context cache key 未纳入 `temperature` 的问题，避免改温度后误复用旧结果
+- 修复 provider 切换时 base URL 只做字符串直比的隐患，统一改为规范化 URL 判定
+- 为官方 `https://api.openai.com/v1` 路径补上前置 API key 校验，避免用户点击生成后才在请求层失败
+- 为 Context AI 生成和 Composer AI 扩写补上 stale request guard，避免请求返回时覆盖用户已经切走或已修改的当前状态
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+- 追加完成 `git diff --check`，确认没有额外的空白或补丁格式问题
+
+#### 当前判断
+
+- 当前 Phase 3 的能力不仅“能用”，而且已经比刚接线时更可控，特别是异步请求返回与工作台状态错位这类高频原型 bug 已被提前压掉
+- 当前最明确的残余工程项不是功能缺失，而是 `WorkspacePage` 体量仍大，以及构建后 `WorkspacePage` chunk 仍略高于 500 kB 警戒线
+- 这轮验证没有推翻之前对 `M3` 完成的判断，但确实补强了这个判断的可信度
+
+#### 遇到的问题
+
+- 目前仍没有自动化测试框架，验证仍以 build、lint 和针对状态边界的代码审查为主
+- AI 请求仍然是浏览器直连 provider，若后续需要更稳的部署与密钥控制，仍要评估 proxy / backend bridge
+- `WorkspacePage` 的体积和职责仍需继续治理，否则后续 Phase 4 / 5 继续增长时风险会重新抬头
+
+#### 下一步
+
+- 继续推进 `WP-H`：优先拆解 `WorkspacePage` 中的 AI assist / composer / snapshot 局部状态，降低单文件密度
+- 继续推进验证基础设施：评估是否为纯函数模块补最小自测入口，而不急着引入重测试栈
+- 继续推进 `M4` / `M5`：在可靠性收口后再扩功能，避免“边长功能边放大旧 bug”
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2298,6 +2330,15 @@ AI 任务拆分为：
 - 这样能一次性把 `M3` 从规则卡片推进到真实可运行链路，而不是分别在 Context 和 Composer 各做一套孤立接线。
 - 共享配置可以减少设置成本，也更符合当前 prototype 的 local-first 工作台定位。
 
+### D-048（2026-03-25）
+
+决定：在 Phase 3 接线完成后，立即对 AI assist 做一轮可靠性加固，优先修正 stale request、缓存键漂移和 provider 配置校验，而不是马上继续堆新功能。
+
+原因：
+
+- 这类问题在原型阶段最容易被“build 能过”掩盖，但一旦用户开始频繁切段落、改配置、改草稿，就会直接影响可信度。
+- 先把这些状态边界补稳，后续继续推进 Phase 4 / Phase 5 时才不会反复回头补基础可靠性。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
@@ -2309,6 +2350,7 @@ AI 任务拆分为：
 5. 当前 `snapshot` 已具备 detail / duplicate / lineage 后，是否已经足够，还是仍需要升级为真正的 draft 实体与列表页？
 6. repo indexing / sample warm-up 下一步是抽成 custom hook / controller，还是继续维持“feature function + page state”的半下沉结构？
 7. Phase 3 当前采用浏览器直连 provider，后续是继续保持 local-first 直连，还是补 server proxy / backend bridge？
+8. 在不引入重测试栈的前提下，是否要先为 `ai/*`、`indexing.ts`、`snapshots.ts` 这类纯函数模块补最小自测入口？
 
 ## 17. 审批后的固定规则
 
@@ -2325,10 +2367,11 @@ AI 任务拆分为：
 
 1. 继续推进 `WP-H`：评估是否把 repo indexing 的 loading / error / source 状态抽成 custom hook 或 controller，进一步压缩页面层异步编排。
 2. 继续推进 `WP-H`：开始清理 AI assist / snapshot detail / selection 这条线的页面状态密度，判断是否抽独立 action/helper 或局部 store。
-3. 继续推进 `M4`：在 Phase 3 已完成后，把主火力切回 repo bridge、本地路径方案和 code-link 深度。
-4. 继续推进 `M5`：根据 snapshot detail / duplicate / lineage 的真实使用路径，决定是否升级为正式 draft 实体与列表页。
-5. 继续推进 Phase 3 后处理：评估 AI 结果是否需要持久化、prompt preset 是否需要拆分，以及是否引入 proxy/bridge。
-6. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
+3. 继续推进验证基础设施：优先为纯函数模块设计最小自测入口，提升后续迭代时的回归把握。
+4. 继续推进 `M4`：在 Phase 3 已完成且可靠性补强后，把主火力切回 repo bridge、本地路径方案和 code-link 深度。
+5. 继续推进 `M5`：根据 snapshot detail / duplicate / lineage 的真实使用路径，决定是否升级为正式 draft 实体与列表页。
+6. 继续推进 Phase 3 后处理：评估 AI 结果是否需要持久化、prompt preset 是否需要拆分，以及是否引入 proxy/bridge。
+7. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
 
 ## 19. 当前迭代执行拆解（Iteration B）
 
