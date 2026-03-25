@@ -6,6 +6,11 @@ export type SnapshotComparisonSummary = {
   signals: string[]
 }
 
+export type SnapshotLineage = {
+  parent: StoredComposerSnapshot | null
+  derivedSnapshots: StoredComposerSnapshot[]
+}
+
 export function buildDuplicateSnapshotName(
   snapshot: StoredComposerSnapshot,
   snapshots: StoredComposerSnapshot[],
@@ -51,6 +56,20 @@ export function buildSnapshotRelationSignals(
   }
 
   return signals
+}
+
+export function buildSnapshotLineage(
+  snapshot: StoredComposerSnapshot,
+  snapshots: StoredComposerSnapshot[],
+): SnapshotLineage {
+  return {
+    parent: snapshot.parentSnapshotId
+      ? snapshots.find((candidate) => candidate.id === snapshot.parentSnapshotId) ?? null
+      : null,
+    derivedSnapshots: snapshots
+      .filter((candidate) => candidate.parentSnapshotId === snapshot.id)
+      .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()),
+  }
 }
 
 export function buildSnapshotComparisonSummary(

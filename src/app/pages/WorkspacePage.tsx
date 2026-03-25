@@ -45,6 +45,7 @@ import {
 } from '../../features/idea-workspace/composer'
 import {
   buildDuplicateSnapshotName,
+  buildSnapshotLineage,
   buildSnapshotComparisonSummary,
   buildSnapshotRelationSignals,
 } from '../../features/idea-workspace/snapshots'
@@ -408,6 +409,9 @@ export default function WorkspacePage() {
   const activeSnapshotCount = composerSnapshots.filter((snapshot) => !snapshot.archivedAt).length
   const archivedSnapshotCount = composerSnapshots.filter((snapshot) => Boolean(snapshot.archivedAt)).length
   const expandedSnapshot = composerSnapshots.find((snapshot) => snapshot.id === expandedSnapshotId) ?? null
+  const expandedSnapshotLineage = expandedSnapshot
+    ? buildSnapshotLineage(expandedSnapshot, composerSnapshots)
+    : null
   const expandedSnapshotComparison = expandedSnapshot
     ? buildSnapshotComparisonSummary(expandedSnapshot, selectedIdeaIds, draftMode, composerMarkdown)
     : null
@@ -1119,6 +1123,10 @@ export default function WorkspacePage() {
 
   function handleToggleComposerSnapshotPreview(snapshotId: string) {
     setExpandedSnapshotId((currentId) => (currentId === snapshotId ? '' : snapshotId))
+  }
+
+  function handleOpenComposerSnapshotDetail(snapshotId: string) {
+    setExpandedSnapshotId(snapshotId)
   }
 
   function hydrateCachedSnapshot(
@@ -2372,6 +2380,93 @@ export default function WorkspacePage() {
                           {signal}
                         </span>
                       ))}
+                    </div>
+                  ) : null}
+                  {expandedSnapshotLineage &&
+                  (expandedSnapshotLineage.parent ||
+                    expandedSnapshotLineage.derivedSnapshots.length ||
+                    expandedSnapshot.parentSnapshotName) ? (
+                    <div className="context-card-block repo-analysis-block">
+                      <div className="context-block-head">
+                        <h3>Lineage</h3>
+                        <span>
+                          {`${expandedSnapshotLineage.parent ? 1 : 0} parent · ${expandedSnapshotLineage.derivedSnapshots.length} derived`}
+                        </span>
+                      </div>
+                      {expandedSnapshotLineage.parent ? (
+                        <article className="candidate-card candidate-card-compact">
+                          <div className="candidate-head">
+                            <strong>{expandedSnapshotLineage.parent.name}</strong>
+                            <span>Parent snapshot</span>
+                          </div>
+                          <p className="candidate-path">
+                            {getSnapshotDocumentName(expandedSnapshotLineage.parent)}
+                          </p>
+                          <p className="repo-analysis-note">
+                            {`Updated ${formatIdeaTime(expandedSnapshotLineage.parent.updatedAt)} · ${expandedSnapshotLineage.parent.draftMode}`}
+                          </p>
+                          <div className="candidate-actions">
+                            <button
+                              className="ghost-button ghost-button-small"
+                              onClick={() => handleOpenComposerSnapshotDetail(expandedSnapshotLineage.parent!.id)}
+                              type="button"
+                            >
+                              Open Parent
+                            </button>
+                            <button
+                              className="ghost-button ghost-button-small"
+                              onClick={() => handleLoadComposerSnapshot(expandedSnapshotLineage.parent!)}
+                              type="button"
+                            >
+                              Load Parent
+                            </button>
+                          </div>
+                        </article>
+                      ) : expandedSnapshot.parentSnapshotName ? (
+                        <p className="repo-analysis-note">
+                          {`Parent snapshot "${expandedSnapshot.parentSnapshotName}" is no longer available locally.`}
+                        </p>
+                      ) : (
+                        <p className="repo-analysis-note">
+                          This snapshot is currently a root draft without a recorded parent.
+                        </p>
+                      )}
+                      {expandedSnapshotLineage.derivedSnapshots.length ? (
+                        <div className="saved-mapping-list">
+                          {expandedSnapshotLineage.derivedSnapshots.map((derivedSnapshot) => (
+                            <article key={derivedSnapshot.id} className="candidate-card candidate-card-compact">
+                              <div className="candidate-head">
+                                <strong>{derivedSnapshot.name}</strong>
+                                <span>{derivedSnapshot.archivedAt ? 'Archived derived' : 'Derived snapshot'}</span>
+                              </div>
+                              <p className="candidate-path">{getSnapshotDocumentName(derivedSnapshot)}</p>
+                              <p className="repo-analysis-note">
+                                {`Updated ${formatIdeaTime(derivedSnapshot.updatedAt)} · ${derivedSnapshot.draftMode}`}
+                              </p>
+                              <div className="candidate-actions">
+                                <button
+                                  className="ghost-button ghost-button-small"
+                                  onClick={() => handleOpenComposerSnapshotDetail(derivedSnapshot.id)}
+                                  type="button"
+                                >
+                                  Open Derived
+                                </button>
+                                <button
+                                  className="ghost-button ghost-button-small"
+                                  onClick={() => handleLoadComposerSnapshot(derivedSnapshot)}
+                                  type="button"
+                                >
+                                  Load Derived
+                                </button>
+                              </div>
+                            </article>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="repo-analysis-note">
+                          No derived snapshots yet. Duplicate this snapshot when you want to branch a new draft.
+                        </p>
+                      )}
                     </div>
                   ) : null}
                   {expandedSnapshotComparison ? (

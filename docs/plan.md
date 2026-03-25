@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:34 (Asia/Shanghai)  
+最后更新：2026-03-25 19:49 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1681,6 +1681,36 @@ AI 任务拆分为：
 - 继续推进 `M5`：评估是否真的需要更重的 lineage/tree 视图
 - 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
 
+
+### 2026-03-25 19:49 / Phase 5 snapshot lineage view pass
+
+#### 已完成
+
+- snapshot detail card 现在不只显示 relation chips，还能直接展示 parent snapshot 与 direct derived snapshots
+- lineage 区支持从 detail card 内直接 `Open Parent / Load Parent / Open Derived / Load Derived`
+- 如果父 snapshot 已不在本地存储中，detail card 也会明确显示缺失提示，而不是只剩抽象 relation 文案
+- 这让 snapshot 的 lineage 已经从“有关系元数据”推进到“可浏览、可跳转的轻量关系视图”
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M5` 已经不再只是把 snapshot 当作平铺列表项，而是开始具备真正的轻量 lineage 浏览能力
+- 当前 lineage view 仍然保持在 detail card 内，没有扩展成单独树视图，但已经足够支撑日常分叉与回看
+- 这一步继续符合当前原型节奏：优先验证“关系是否真的常用”，再决定是否升级为更重的 tree/history 界面
+
+#### 遇到的问题
+
+- 当前 lineage 仍然只覆盖单层 parent 和 direct derived，不会展开更深层历史
+- derived snapshot 列表仍是简单卡片，不提供批量 compare 或 collapse tree
+- 目前 lineage view 还没有按时间或活跃度切换排序
+
+#### 下一步
+
+- 继续推进 `WP-H`：评估是否把 repo index / regression diagnostics helper 继续下沉
+- 继续推进 `M5`：评估 lineage 是否真的需要升级为更深层 tree/history
+- 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2057,6 +2087,15 @@ AI 任务拆分为：
 
 - 当前这几类 helper 都围绕同一份 `RepoSymbolCacheEntry` 结构运作，先放在一起更利于快速稳定接口。
 - 等 repo cache browser 的行为再长一轮之后，再判断是否值得进一步拆成独立模块，会更稳妥。
+
+### D-042（2026-03-25）
+
+决定：snapshot 的第一轮 lineage 浏览继续内嵌在 detail card 内，只展示 parent 和 direct derived，而不是立即扩展为完整树视图。
+
+原因：
+
+- 当前更需要验证“用户是否真的会频繁沿 lineage 来回跳转”，而不是先投入复杂的树形页面。
+- 只展示一层 parent 和 direct derived，已经能覆盖当前 duplicate 分叉后的主要浏览需求，同时保持实现边界清晰。
 
 ## 16. 当前开放问题
 
