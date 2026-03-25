@@ -41,6 +41,7 @@ export function buildContextCard(
     },
     evidenceRefs: buildEvidenceRefs(paragraph, sentences),
     terms: extractTerms(paragraph.text),
+    source: 'rule',
   }
 }
 

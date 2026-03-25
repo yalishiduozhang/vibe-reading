@@ -45,10 +45,14 @@ export type ContextCardField = {
 
 export type ContextCardData = {
   summary: ContextCardField
+  translation?: ContextCardField
   focusNote: ContextCardField
   whyItMatters: ContextCardField
   evidenceRefs: EvidenceRef[]
   terms: string[]
+  source?: 'rule' | 'ai'
+  providerLabel?: string
+  generatedAt?: string
 }
 
 export type IdeaTag = 'Improvement' | 'Question' | 'Experiment' | 'Project'

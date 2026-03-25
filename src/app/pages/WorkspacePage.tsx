@@ -2,6 +2,20 @@ import { startTransition, useEffect, useId, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
 
+import { expandIdeaDraftWithAi } from '../../features/ai/composer'
+import { generateAiContextCard } from '../../features/ai/context'
+import {
+  aiProviderKinds,
+  aiResponseLanguages,
+  getAiConfigIssue,
+  getAiProviderLabel,
+  getDefaultAiBaseUrl,
+  loadStoredAiConfig,
+  saveStoredAiConfig,
+  type AiProviderKind,
+  type AiResponseLanguage,
+  type StoredAiConfig,
+} from '../../features/ai/storage'
 import { buildCodeCandidates } from '../../features/code-link/candidates'
 import {
   demoSamples,
@@ -79,6 +93,7 @@ import { loadPdfDocument, renderPdfPage } from '../../features/reader/pdf'
 import type { LoadedPdfDocument } from '../../features/reader/pdf'
 import type {
   CodeCandidate,
+  ContextCardData,
   EvidenceAttribution,
   IdeaTag,
   ReaderPageSnapshot,
@@ -144,6 +159,9 @@ export default function WorkspacePage() {
   const [selectedIdeaIds, setSelectedIdeaIds] = useState<string[]>(() => loadStoredComposerDraft()?.selectedIdeaIds ?? [])
   const [composerMarkdown, setComposerMarkdown] = useState(() => loadStoredComposerDraft()?.markdown ?? '')
   const [composerStatus, setComposerStatus] = useState<string | null>(null)
+  const [aiConfig, setAiConfig] = useState<StoredAiConfig>(() => loadStoredAiConfig())
+  const [generatedContextCards, setGeneratedContextCards] = useState<Record<string, ContextCardData>>({})
+  const [contextStatus, setContextStatus] = useState<string | null>(null)
   const [composerSnapshotName, setComposerSnapshotName] = useState('')
   const [composerSnapshotNote, setComposerSnapshotNote] = useState('')
   const [composerSnapshots, setComposerSnapshots] = useState<StoredComposerSnapshot[]>(() =>
@@ -173,6 +191,8 @@ export default function WorkspacePage() {
   const [isLoadingDocument, setIsLoadingDocument] = useState(false)
   const [isIndexingRepo, setIsIndexingRepo] = useState(false)
   const [isIndexingSampleRegression, setIsIndexingSampleRegression] = useState(false)
+  const [isGeneratingContext, setIsGeneratingContext] = useState(false)
+  const [isExpandingComposerWithAi, setIsExpandingComposerWithAi] = useState(false)
   const restoredComposerSelectionKeyRef = useRef(loadStoredComposerDraft()?.selectionKey ?? '')
   const pendingSnapshotLoadRef = useRef<StoredComposerSnapshot | null>(null)
 
@@ -307,6 +327,10 @@ export default function WorkspacePage() {
   }, [codeLinkDecisions])
 
   useEffect(() => {
+    saveStoredAiConfig(aiConfig)
+  }, [aiConfig])
+
+  useEffect(() => {
     const validIds = new Set(ideas.map((idea) => idea.id))
     setSelectedIdeaIds((currentIds) => currentIds.filter((ideaId) => validIds.has(ideaId)))
   }, [ideas])
@@ -317,6 +341,11 @@ export default function WorkspacePage() {
     null
   const selectedDemoSample = getDemoSampleById(selectedDemoSampleId)
   const contextCard = buildContextCard(selectedParagraph, intent)
+  const aiContextCacheKey = selectedParagraph ? buildAiContextCacheKey(selectedParagraph, intent, aiConfig) : ''
+  const liveContextCard = aiContextCacheKey ? generatedContextCards[aiContextCacheKey] ?? null : null
+  const displayedContextCard = liveContextCard ?? contextCard
+  const aiConfigIssue = getAiConfigIssue(aiConfig)
+  const aiProviderLabel = getAiProviderLabel(aiConfig)
   const repoAnalysis = analyzeRepoSource(repoSource)
   const matchedDemoSample =
     matchDemoSampleBySource(repoAnalysis.normalizedSource || repoSource) ?? selectedDemoSample
@@ -452,6 +481,10 @@ export default function WorkspacePage() {
   }, [symbolCacheSearchQuery, symbolCacheViewMode, repoIndex?.repoUrl, selectedParagraph?.id])
 
   useEffect(() => {
+    setContextStatus(null)
+  }, [aiContextCacheKey])
+
+  useEffect(() => {
     if (!selectedIdeas.length) {
       pendingSnapshotLoadRef.current = null
       restoredComposerSelectionKeyRef.current = composerSelectionKey
@@ -561,6 +594,59 @@ export default function WorkspacePage() {
     setSelectedDemoSampleId(nextSampleId)
     setAssistTab('code')
     setRepoSource(nextSample.repoUrl)
+  }
+
+  function handleAiProviderChange(event: ChangeEvent<HTMLSelectElement>) {
+    const nextProvider = event.target.value as AiProviderKind
+
+    setAiConfig((currentConfig) => ({
+      ...currentConfig,
+      provider: nextProvider,
+      baseUrl: shouldResetAiBaseUrl(currentConfig)
+        ? getDefaultAiBaseUrl(nextProvider)
+        : currentConfig.baseUrl,
+    }))
+  }
+
+  async function handleGenerateAiContext() {
+    if (!selectedParagraph || !contextCard) {
+      return
+    }
+
+    setIsGeneratingContext(true)
+    setContextStatus(null)
+
+    try {
+      const nextContextCard = await generateAiContextCard(selectedParagraph, intent, aiConfig)
+      const nextCacheKey = buildAiContextCacheKey(selectedParagraph, intent, aiConfig)
+
+      setGeneratedContextCards((currentCards) => ({
+        ...currentCards,
+        [nextCacheKey]: nextContextCard,
+      }))
+      setContextStatus(`Generated live context with ${nextContextCard.providerLabel ?? aiProviderLabel}.`)
+    } catch (contextError: unknown) {
+      setContextStatus(getErrorMessage(contextError, 'Failed to generate live AI context.'))
+    } finally {
+      setIsGeneratingContext(false)
+    }
+  }
+
+  function handleResetAiContext() {
+    if (!aiContextCacheKey) {
+      return
+    }
+
+    setGeneratedContextCards((currentCards) => {
+      if (!(aiContextCacheKey in currentCards)) {
+        return currentCards
+      }
+
+      const nextCards = { ...currentCards }
+      delete nextCards[aiContextCacheKey]
+      return nextCards
+    })
+    setContextStatus('Restored the rule-based context baseline for this paragraph.')
   }
 
   async function handleIndexRepo(forceRefresh = false) {
@@ -830,6 +916,31 @@ export default function WorkspacePage() {
 
   function handleClearIdeaSelection() {
     setSelectedIdeaIds([])
+  }
+
+  async function handleExpandComposerWithAi() {
+    if (!selectedIdeas.length || !composerMarkdown.trim()) {
+      return
+    }
+
+    setIsExpandingComposerWithAi(true)
+    setComposerStatus(null)
+
+    try {
+      const nextMarkdown = await expandIdeaDraftWithAi({
+        config: aiConfig,
+        ideas: selectedIdeas,
+        draftMode,
+        currentMarkdown: composerMarkdown,
+      })
+
+      setComposerMarkdown(nextMarkdown)
+      setComposerStatus(`Expanded draft with ${aiProviderLabel}.`)
+    } catch (expansionError: unknown) {
+      setComposerStatus(getErrorMessage(expansionError, 'Failed to expand the draft with AI.'))
+    } finally {
+      setIsExpandingComposerWithAi(false)
+    }
   }
 
   async function handleCopyComposerDraft() {
@@ -1316,22 +1427,157 @@ export default function WorkspacePage() {
 
           {assistTab === 'context' ? (
             <div className="context-panel-content">
-              {selectedParagraph && contextCard ? (
+              <section className="context-card-block repo-analysis-block">
+                <div className="context-block-head">
+                  <h3>AI Assist</h3>
+                  <span>{aiProviderLabel}</span>
+                </div>
+                <div className="idea-filter-grid">
+                  <label className="control-group">
+                    <span>Provider</span>
+                    <select value={aiConfig.provider} onChange={handleAiProviderChange}>
+                      {aiProviderKinds.map((provider) => (
+                        <option key={provider} value={provider}>
+                          {provider}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="control-group">
+                    <span>Response Language</span>
+                    <select
+                      value={aiConfig.responseLanguage}
+                      onChange={(event) =>
+                        setAiConfig((currentConfig) => ({
+                          ...currentConfig,
+                          responseLanguage: event.target.value as AiResponseLanguage,
+                        }))
+                      }
+                    >
+                      {aiResponseLanguages.map((language) => (
+                        <option key={language} value={language}>
+                          {language}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="control-group control-group-wide">
+                    <span>Base URL</span>
+                    <input
+                      placeholder={getDefaultAiBaseUrl(aiConfig.provider)}
+                      value={aiConfig.baseUrl}
+                      onChange={(event) =>
+                        setAiConfig((currentConfig) => ({
+                          ...currentConfig,
+                          baseUrl: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="control-group">
+                    <span>Model</span>
+                    <input
+                      placeholder="Enter model name"
+                      value={aiConfig.model}
+                      onChange={(event) =>
+                        setAiConfig((currentConfig) => ({
+                          ...currentConfig,
+                          model: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                  <label className="control-group">
+                    <span>Temperature</span>
+                    <input
+                      max="1"
+                      min="0"
+                      step="0.1"
+                      type="number"
+                      value={aiConfig.temperature}
+                      onChange={(event) =>
+                        setAiConfig((currentConfig) => ({
+                          ...currentConfig,
+                          temperature: Number(event.target.value),
+                        }))
+                      }
+                    />
+                  </label>
+                </div>
+                {aiConfig.provider === 'openai-compatible' ? (
+                  <label className="control-group control-group-wide">
+                    <span>API Key</span>
+                    <input
+                      placeholder="Optional for local proxies"
+                      type="password"
+                      value={aiConfig.apiKey}
+                      onChange={(event) =>
+                        setAiConfig((currentConfig) => ({
+                          ...currentConfig,
+                          apiKey: event.target.value,
+                        }))
+                      }
+                    />
+                  </label>
+                ) : null}
+                <p className="repo-analysis-note">
+                  {aiConfigIssue ??
+                    'Live AI generation is ready. Context cards and composer expansion will reuse this same provider.'}
+                </p>
+                <div className="candidate-actions">
+                  <button
+                    className="ghost-button ghost-button-small"
+                    disabled={!selectedParagraph || Boolean(aiConfigIssue) || isGeneratingContext}
+                    onClick={() => void handleGenerateAiContext()}
+                    type="button"
+                  >
+                    {isGeneratingContext
+                      ? 'Generating...'
+                      : displayedContextCard?.source === 'ai'
+                        ? 'Regenerate With AI'
+                        : 'Generate With AI'}
+                  </button>
+                  <button
+                    className="ghost-button ghost-button-small"
+                    disabled={!liveContextCard}
+                    onClick={handleResetAiContext}
+                    type="button"
+                  >
+                    Use Rule Baseline
+                  </button>
+                </div>
+                {contextStatus ? <p className="repo-analysis-note">{contextStatus}</p> : null}
+              </section>
+              {selectedParagraph && displayedContextCard ? (
                 <>
-                  <div className="selection-chip">Focused on {selectedParagraph.evidenceLabel}</div>
+                  <div className="selection-chip-row">
+                    <div className="selection-chip">Focused on {selectedParagraph.evidenceLabel}</div>
+                    <div className="selection-chip">
+                      {displayedContextCard.source === 'ai'
+                        ? `${displayedContextCard.providerLabel ?? 'AI output'}${displayedContextCard.generatedAt ? ` · ${formatRelativeTime(displayedContextCard.generatedAt)}` : ''}`
+                        : 'Rule baseline'}
+                    </div>
+                  </div>
                   <ContextFieldBlock
-                    attribution={contextCard.summary.attribution}
-                    body={contextCard.summary.text}
+                    attribution={displayedContextCard.summary.attribution}
+                    body={displayedContextCard.summary.text}
                     title="Anchor Summary"
                   />
+                  {displayedContextCard.translation ? (
+                    <ContextFieldBlock
+                      attribution={displayedContextCard.translation.attribution}
+                      body={displayedContextCard.translation.text}
+                      title="Translation / Plain Rewrite"
+                    />
+                  ) : null}
                   <ContextFieldBlock
-                    attribution={contextCard.focusNote.attribution}
-                    body={contextCard.focusNote.text}
+                    attribution={displayedContextCard.focusNote.attribution}
+                    body={displayedContextCard.focusNote.text}
                     title="Intent Lens"
                   />
                   <ContextFieldBlock
-                    attribution={contextCard.whyItMatters.attribution}
-                    body={contextCard.whyItMatters.text}
+                    attribution={displayedContextCard.whyItMatters.attribution}
+                    body={displayedContextCard.whyItMatters.text}
                     title="Why It Matters"
                   />
                   <section className="context-card-block">
@@ -1339,7 +1585,7 @@ export default function WorkspacePage() {
                       <h3>Key Terms</h3>
                     </div>
                     <div className="term-list">
-                      {contextCard.terms.map((term) => (
+                      {displayedContextCard.terms.map((term) => (
                         <span key={term} className="term-chip">
                           {term}
                         </span>
@@ -1352,7 +1598,7 @@ export default function WorkspacePage() {
                       <span className="attribution-chip attribution-chip-quoted">quoted</span>
                     </div>
                     <div className="evidence-list">
-                      {contextCard.evidenceRefs.map((reference) => (
+                      {displayedContextCard.evidenceRefs.map((reference) => (
                         <article key={`${reference.paragraphId}-${reference.sentenceStart}`} className="evidence-card">
                           <p className="evidence-label">{formatEvidenceRef(reference)}</p>
                           <p>{reference.excerpt}</p>
@@ -2234,6 +2480,19 @@ export default function WorkspacePage() {
                   <div className="candidate-actions">
                     <button
                       className="ghost-button ghost-button-small"
+                      disabled={
+                        !selectedIdeas.length ||
+                        !composerMarkdown.trim() ||
+                        Boolean(aiConfigIssue) ||
+                        isExpandingComposerWithAi
+                      }
+                      onClick={() => void handleExpandComposerWithAi()}
+                      type="button"
+                    >
+                      {isExpandingComposerWithAi ? 'Expanding...' : 'Expand With AI'}
+                    </button>
+                    <button
+                      className="ghost-button ghost-button-small"
                       disabled={!isComposerDirty}
                       onClick={handleResetComposerDraft}
                       type="button"
@@ -2258,6 +2517,11 @@ export default function WorkspacePage() {
                     </button>
                   </div>
                 </div>
+                <p className="repo-analysis-note">
+                  {aiConfigIssue
+                    ? aiConfigIssue
+                    : `Composer expansion will use ${aiProviderLabel} and keep the current anchor references in the markdown.`}
+                </p>
                 {composerStatus ? <p className="repo-analysis-note">{composerStatus}</p> : null}
                 <textarea
                   className="composer-editor"
@@ -2702,6 +2966,25 @@ function countCachedPages(cache: Record<string, ReaderPageSnapshot>): number {
 
 function makeCacheKey(pageNumber: number, intent: ReadingIntent): string {
   return `${pageNumber}:${intent}`
+}
+
+function buildAiContextCacheKey(
+  paragraph: ReaderParagraph,
+  intent: ReadingIntent,
+  config: StoredAiConfig,
+): string {
+  return [
+    paragraph.id,
+    intent,
+    config.provider,
+    config.responseLanguage,
+    config.baseUrl.trim().toLowerCase(),
+    config.model.trim().toLowerCase(),
+  ].join('::')
+}
+
+function shouldResetAiBaseUrl(config: StoredAiConfig): boolean {
+  return !config.baseUrl.trim() || config.baseUrl.trim() === getDefaultAiBaseUrl(config.provider)
 }
 
 function loadStoredRepo(): string {

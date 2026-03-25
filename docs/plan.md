@@ -1,8 +1,8 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 20:11 (Asia/Shanghai)  
-当前阶段：Phase 4 in progress + Phase 5 in progress + WP-H in progress  
+最后更新：2026-03-25 20:21 (Asia/Shanghai)  
+当前阶段：Phase 3 completed + Phase 4 in progress + Phase 5 in progress + WP-H in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
 ## 1. 文档目的
@@ -508,6 +508,10 @@ AI 任务拆分为：
 - 解释结果能回到页码与段落
 - 不出现大面积遮挡原文的交互问题
 
+#### 当前状态
+
+- 已完成
+
 ### Phase 4：论文-代码联动 MVP
 
 #### 目标
@@ -594,7 +598,7 @@ AI 任务拆分为：
 | M0 | 计划与文档冻结 | Completed | `plan.md` 获批，文档与仓库基线完成 |
 | M1 | 信息架构与原型蓝图 | Completed | 核心页面、流程、线框与前端骨架确定 |
 | M2 | Reader Core 可用 | Completed | 稳定 PDF 阅读、段落锚点、多页状态记忆与回跳能力已经可演示 |
-| M3 | 内联辅助与证据链可用 | In Progress | 卡片和回跳可演示 |
+| M3 | 内联辅助与证据链可用 | Completed | 工作台已支持规则基线 + 真实 AI provider 生成、意图驱动解释、翻译/改写、证据回跳 |
 | M4 | 论文-代码联动可用 | In Progress | 至少 1 个真实案例跑通 |
 | M5 | Idea 工作台可用 | In Progress | idea -> 文档闭环跑通 |
 | M6 | 展示版与测试版完成 | Pending | 支持课程展示与测试 |
@@ -1830,6 +1834,39 @@ AI 任务拆分为：
 - 继续推进 `WP-H`：开始清理 snapshot/detail/selection 这条线的页面状态密度
 - 继续推进 `M3`：定义最小 AI provider 接线边界，避免计划长期只在 Phase 4 / Phase 5 横向扩张
 
+
+### 2026-03-25 20:21 / Phase 3 live AI assist breakthrough
+
+#### 已完成
+
+- 新增 `src/features/ai/storage.ts`，为工作台引入本地持久化的 AI provider 配置，统一承接 `disabled / openai-compatible / ollama`
+- 新增 `src/features/ai/client.ts`，建立浏览器侧的 provider 请求适配层，统一处理 OpenAI-compatible 与 Ollama 的文本 / JSON 返回
+- 新增 `src/features/ai/context.ts`，让 Context 面板可对当前段落发起真实模型请求，生成 `summary / translation / focusNote / whyItMatters / terms`
+- 当前 Context 面板已支持 provider 配置、响应语言、温度、API key（可选）、`Generate With AI / Use Rule Baseline`
+- AI 生成结果会继续复用既有的 evidence ref 跳转链路，因此解释仍能回到页码与段落
+- 当前 Context 卡片会显式标记 `Rule baseline` 或 `provider + relative time`，不再把规则输出和模型输出混在一起
+- Composer 现在可用同一套 provider 执行 `Expand With AI`，在保留 anchor 引用的前提下重写草稿 Markdown
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M3` 可以判定为完成：Phase 3 不再只是规则卡片和 evidence schema，而是已经具备最小可运行的真实 AI 辅助链路
+- 当前工作台已经形成更完整的闭环：读段落 -> 生成 AI 上下文 -> 回跳证据 -> 记 idea -> 生成草稿 -> AI 扩写
+- 这一轮是阶段性突破，而不是局部修补，因此顶部阶段判断、里程碑表和下一批执行项都需要同步重排
+
+#### 遇到的问题
+
+- 当前 AI 请求仍是浏览器直连 provider，后续若考虑分享、部署或更强的密钥控制，可能还需要 proxy / backend bridge
+- AI context 结果目前是工作台内存态缓存，不是持久化 artifact
+- `WorkspacePage` 继续膨胀，虽然能力上去了，但 `WP-H` 仍然需要继续治理状态密度
+
+#### 下一步
+
+- 继续推进 `WP-H`：清理 `WorkspacePage` 中围绕 AI assist / snapshot detail / selection 的局部状态与交互接线
+- 继续推进 `M4`：在 Phase 3 已收口后，把主火力重新放回 repo bridge、local path 方案与 code-link 深度
+- 继续推进 `M5`：判断当前 snapshot library 是否足够，还是升级为正式 draft entity
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2252,6 +2289,15 @@ AI 任务拆分为：
 - 这样可以先把网络拉取、缓存复用和 diagnostic 聚合这些真正会继续膨胀的流程从页面里拿走，收益比继续抽零散 helper 更直接。
 - 同时可以避免过早把 repo indexing 和工作区其他状态捆进一套还未验证的全局状态模型。
 
+### D-047（2026-03-25）
+
+决定：Phase 3 的第一轮真实模型接线采用“工作台级共享 AI 配置 + Context / Composer 共用 provider”的路线，同时首轮直接支持 `OpenAI-compatible` 与 `Ollama`。
+
+原因：
+
+- 这样能一次性把 `M3` 从规则卡片推进到真实可运行链路，而不是分别在 Context 和 Composer 各做一套孤立接线。
+- 共享配置可以减少设置成本，也更符合当前 prototype 的 local-first 工作台定位。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
@@ -2262,7 +2308,7 @@ AI 任务拆分为：
 4. Web-first 原型里，本地仓库读取是先通过后端桥接，还是先以 GitHub URL 演示为主？
 5. 当前 `snapshot` 已具备 detail / duplicate / lineage 后，是否已经足够，还是仍需要升级为真正的 draft 实体与列表页？
 6. repo indexing / sample warm-up 下一步是抽成 custom hook / controller，还是继续维持“feature function + page state”的半下沉结构？
-7. `M3` 的最小模型接线应先只接 `OpenAI-compatible`，还是同步保留 `Ollama` 的 adapter shell？
+7. Phase 3 当前采用浏览器直连 provider，后续是继续保持 local-first 直连，还是补 server proxy / backend bridge？
 
 ## 17. 审批后的固定规则
 
@@ -2278,10 +2324,10 @@ AI 任务拆分为：
 接下来应按以下顺序继续：
 
 1. 继续推进 `WP-H`：评估是否把 repo indexing 的 loading / error / source 状态抽成 custom hook 或 controller，进一步压缩页面层异步编排。
-2. 继续推进 `WP-H`：开始清理 snapshot/detail/selection 这条线的页面状态密度，判断是否抽独立 action/helper 或局部 store。
-3. 继续推进 `M3`：定义最小 AI provider 接线边界，把 Context 从规则卡片推进到可替换的模型输出链路。
-4. 继续推进 `M4`：在现有 code-link explainability 基础上，继续观察 `indexing.ts`、`regression.ts`、`mappings.ts` 的边界是否还要再拆。
-5. 继续推进 `M5`：根据 snapshot detail / duplicate / lineage 的真实使用路径，决定是否升级为正式 draft 实体与列表页。
+2. 继续推进 `WP-H`：开始清理 AI assist / snapshot detail / selection 这条线的页面状态密度，判断是否抽独立 action/helper 或局部 store。
+3. 继续推进 `M4`：在 Phase 3 已完成后，把主火力切回 repo bridge、本地路径方案和 code-link 深度。
+4. 继续推进 `M5`：根据 snapshot detail / duplicate / lineage 的真实使用路径，决定是否升级为正式 draft 实体与列表页。
+5. 继续推进 Phase 3 后处理：评估 AI 结果是否需要持久化、prompt preset 是否需要拆分，以及是否引入 proxy/bridge。
 6. 在形成下一次阶段性突破后做本地提交，并按分钟级时间更新进展日志。
 
 ## 19. 当前迭代执行拆解（Iteration B）

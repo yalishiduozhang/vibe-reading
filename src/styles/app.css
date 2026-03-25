@@ -445,6 +445,12 @@
   z-index: 2;
 }
 
+.selection-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .paragraph-anchor-rail {
   position: absolute;
   top: 20px;
