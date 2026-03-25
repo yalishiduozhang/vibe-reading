@@ -29,6 +29,8 @@ import {
   saveStoredRepoIndexCache,
 } from '../../features/code-link/storage'
 import {
+  rankRepoSymbolCacheEntries,
+  type RankedRepoSymbolCacheEntry,
   type RepoSymbolCacheEntry,
 } from '../../features/code-link/symbols'
 import {
@@ -301,6 +303,17 @@ export default function WorkspacePage() {
     repoIndexCacheVersion,
   )
   const repoSymbolCacheEntries: RepoSymbolCacheEntry[] = repoIndex?.symbolCache ?? []
+  const rankedRepoSymbolCacheEntries: RankedRepoSymbolCacheEntry[] = selectedParagraph
+    ? rankRepoSymbolCacheEntries(repoSymbolCacheEntries, selectedParagraph.text)
+    : []
+  const visibleRepoSymbolCacheEntries: RankedRepoSymbolCacheEntry[] =
+    rankedRepoSymbolCacheEntries.length > 0
+      ? rankedRepoSymbolCacheEntries
+      : repoSymbolCacheEntries.slice(0, 6).map((entry) => ({
+          ...entry,
+          score: 0,
+          signals: [],
+        }))
   const repoIndexStatusSignals = repoIndex ? buildRepoIndexStatusSignals(repoIndex, repoIndexSource) : []
   const codeCandidates = buildCodeCandidates(
     selectedParagraph,
@@ -1451,20 +1464,40 @@ export default function WorkspacePage() {
                         <section className="context-card-block repo-analysis-block">
                           <div className="context-block-head">
                             <h3>Indexed Symbol Cache</h3>
-                            <span>{repoSymbolCacheEntries.length} symbols</span>
+                            <span>
+                              {selectedParagraph && rankedRepoSymbolCacheEntries.length
+                                ? `${rankedRepoSymbolCacheEntries.length} focused / ${repoSymbolCacheEntries.length} cached`
+                                : `${repoSymbolCacheEntries.length} cached`}
+                            </span>
                           </div>
+                          {selectedParagraph ? (
+                            <p className="repo-analysis-note">
+                              {rankedRepoSymbolCacheEntries.length
+                                ? 'Showing the strongest paragraph-aware symbol hits from the current repo cache.'
+                                : 'No direct symbol-cache hit for the current paragraph yet. Showing the top cached symbols instead.'}
+                            </p>
+                          ) : null}
                           {repoSymbolCacheEntries.length ? (
                             <div className="saved-mapping-list">
-                              {repoSymbolCacheEntries.map((entry) => (
+                              {visibleRepoSymbolCacheEntries.map((entry) => (
                                 <article key={entry.id} className="candidate-card candidate-card-compact">
                                   <div className="candidate-head">
                                     <strong>{entry.symbol}</strong>
-                                    <span>{entry.fileName}</span>
+                                    <span>{entry.score ? `score ${entry.score}` : entry.fileName}</span>
                                   </div>
                                   <p className="candidate-path">
                                     {formatCodeTargetPath(entry.path, entry.lineNumber)}
                                   </p>
                                   <CodeSnippetPreview snippet={entry.snippet} />
+                                  {entry.signals.length ? (
+                                    <div className="repo-signal-list">
+                                      {entry.signals.map((signal) => (
+                                        <span key={`${entry.id}-${signal}`} className="repo-signal-item">
+                                          {signal}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : null}
                                   <div className="candidate-actions">
                                     <a
                                       className="secondary-link secondary-link-inline"

@@ -15,6 +15,11 @@ export type RepoSymbolCacheEntry = {
   snippet?: string
 }
 
+export type RankedRepoSymbolCacheEntry = RepoSymbolCacheEntry & {
+  score: number
+  signals: string[]
+}
+
 export function buildRepoSymbolCache(
   repoIndex: GitHubRepoIndex,
   options: {
@@ -47,6 +52,81 @@ export function buildRepoSymbolCache(
   }
 
   return entries
+}
+
+export function rankRepoSymbolCacheEntries(
+  entries: RepoSymbolCacheEntry[],
+  paragraphText: string,
+  options: {
+    maxEntries?: number
+  } = {},
+): RankedRepoSymbolCacheEntry[] {
+  const paragraphTerms = extractFocusTerms(paragraphText)
+  const loweredParagraphText = paragraphText.toLowerCase()
+  const maxEntries = options.maxEntries ?? 6
+
+  return entries
+    .map((entry) => {
+      const signals = new Set<string>()
+      const symbolTokens = splitSymbolTokens(entry.symbol)
+      const pathTokens = splitPathTokens(entry.path)
+      const loweredSymbol = entry.symbol.toLowerCase()
+      const loweredSnippet = entry.snippet?.toLowerCase() ?? ''
+      let score = 0
+
+      if (loweredParagraphText.includes(loweredSymbol)) {
+        score += 8
+        signals.add(`${entry.symbol} mentioned in paragraph`)
+      }
+
+      for (const term of paragraphTerms) {
+        if (loweredSymbol === term || symbolTokens.includes(term)) {
+          score += 5
+          signals.add(`${term} matched symbol token`)
+          continue
+        }
+
+        if (pathTokens.includes(term)) {
+          score += 3
+          signals.add(`${term} matched indexed path`)
+          continue
+        }
+
+        if (loweredSnippet.includes(term)) {
+          score += 1
+          signals.add(`${term} matched indexed snippet`)
+        }
+      }
+
+      if (loweredParagraphText.includes('prompt') && [...symbolTokens, ...pathTokens].some((token) => /prompt|predict/.test(token))) {
+        score += 2
+        signals.add('prompt language matched symbol cache')
+      }
+
+      if (loweredParagraphText.includes('mask') && [...symbolTokens, ...pathTokens].some((token) => token.includes('mask'))) {
+        score += 2
+        signals.add('mask language matched symbol cache')
+      }
+
+      if (loweredParagraphText.includes('encoder') && [...symbolTokens, ...pathTokens].some((token) => token.includes('encoder'))) {
+        score += 2
+        signals.add('encoder language matched symbol cache')
+      }
+
+      if (loweredParagraphText.includes('decoder') && [...symbolTokens, ...pathTokens].some((token) => token.includes('decoder'))) {
+        score += 2
+        signals.add('decoder language matched symbol cache')
+      }
+
+      return {
+        ...entry,
+        score,
+        signals: Array.from(signals).slice(0, 3),
+      }
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score || left.lineNumber - right.lineNumber)
+    .slice(0, maxEntries)
 }
 
 export function buildIndexedSnippet(
@@ -116,6 +196,29 @@ export function splitSymbolTokens(name: string): string[] {
     .replace(/[_./-]+/g, ' ')
     .toLowerCase()
     .split(/\s+/)
+    .filter((token) => token.length > 2)
+}
+
+function extractFocusTerms(text: string): string[] {
+  const titleCaseMatches = text.match(/\b[A-Z][A-Za-z0-9-]{2,}\b/g) ?? []
+  const codeStyleMatches = text.match(/\b(?:[a-z]+_[a-z0-9_]+|[a-z]+(?:[A-Z][a-z0-9]+)+)\b/g) ?? []
+  const lowercaseKeywords =
+    text
+      .toLowerCase()
+      .match(
+        /\b(model|dataset|training|module|loss|encoder|decoder|experiment|prompt|retrieval|mask|attention|adapter|segmentation|image|text)\b/g,
+      ) ?? []
+
+  return Array.from(new Set([...titleCaseMatches, ...codeStyleMatches, ...lowercaseKeywords]))
+    .map((term) => term.toLowerCase())
+    .slice(0, 6)
+}
+
+function splitPathTokens(path: string): string[] {
+  return path
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
     .filter((token) => token.length > 2)
 }
 

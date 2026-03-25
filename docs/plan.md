@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 18:59 (Asia/Shanghai)  
+最后更新：2026-03-25 19:03 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1383,6 +1383,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否把 regression diagnostics 做成更明确的错误类型与刷新建议
 - 继续推进 `M5`：继续评估 snapshot 是否需要升级为更稳定的 draft/entity 视图
 
+
+### 2026-03-25 19:03 / Phase 4 symbol cache ranking pass
+
+#### 已完成
+
+- `Indexed Symbol Cache` 开始根据当前段落做 paragraph-aware 排序，而不是只按缓存原顺序平铺
+- 新增 symbol-cache ranking helper，会综合 `symbol token / path / snippet / prompt-mask-encoder-decoder` 这些信号给出 focused hits
+- 当前命中的 symbol 会直接显示 `score` 与 signal chips，让 repo preview 更接近可解释的调试面板
+- 当没有直接命中时，界面会明确退回到 top cached symbols，而不是无提示地混用两种状态
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里关于 symbol cache 的可排序、可解释层已经继续落地，不再只是“持久化了但不会用”
+- 当前 `Remote Repo Index` 和 active candidate 区的 explainability 风格更接近，代码联动区内部的一致性更好
+- 这一步继续符合轻量原型路线：增强的是现有面板的诊断价值，而不是新开一个复杂子页面
+
+#### 遇到的问题
+
+- 当前 ranking 仍然是启发式，不是更严格的 IR / embedding 检索
+- `score` 目前只服务于相对排序，没有校准成更稳定的跨 repo 指标
+- 目前 focused hits 只展示前几项，尚未提供完整展开或搜索
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否把 regression diagnostics 做成更明确的错误类型与刷新建议
+- 继续推进 `M4`：评估是否给 symbol cache 增加更细的搜索或展开策略
+- 继续推进 `M5`：继续评估 snapshot 是否需要升级为更稳定的 draft/entity 视图
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1669,6 +1699,15 @@ AI 任务拆分为：
 
 - 当前 repo preview、repo cache 和后续候选生成都已经开始共享这层结构，继续只做运行时派生会重复计算并弱化 cache 的意义。
 - 通过 `enrich` 方式并入持久化结构，可以兼容旧缓存，同时保持当前字段仍可继续低成本演化。
+
+### D-032（2026-03-25）
+
+决定：symbol cache 的 paragraph-aware 排序第一轮直接叠加在现有 `Indexed Symbol Cache` 面板内，而不是额外拆出新的命中解释面板。
+
+原因：
+
+- 当前更需要的是让 repo preview 内部直接体现“哪些 cached symbols 对当前段落最相关”，而不是再增加一层新的界面结构。
+- 复用现有卡片和 signal chips，可以让 symbol cache explainability 与 active candidate explainability 保持同一视觉语言。
 
 ## 16. 当前开放问题
 
