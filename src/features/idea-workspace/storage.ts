@@ -1,4 +1,4 @@
-import type { StoredIdea } from '../reader/types'
+import type { IdeaTag, StoredIdea } from '../reader/types'
 import type { DraftMode } from './composer'
 
 const ideaStorageKey = 'openviberead.ideas.v1'
@@ -21,6 +21,8 @@ export type StoredComposerSnapshot = {
   draftMode: DraftMode
   markdown: string
   updatedAt: string
+  documentName?: string
+  ideaTags?: IdeaTag[]
 }
 
 export function loadStoredIdeas(): StoredIdea[] {
@@ -170,6 +172,9 @@ function isStoredComposerSnapshot(value: unknown): value is StoredComposerSnapsh
     candidate.selectedIdeaIds.every((ideaId) => typeof ideaId === 'string') &&
     typeof candidate.draftMode === 'string' &&
     typeof candidate.markdown === 'string' &&
-    typeof candidate.updatedAt === 'string'
+    typeof candidate.updatedAt === 'string' &&
+    (candidate.documentName === undefined || typeof candidate.documentName === 'string') &&
+    (candidate.ideaTags === undefined ||
+      (Array.isArray(candidate.ideaTags) && candidate.ideaTags.every((tag) => typeof tag === 'string')))
   )
 }

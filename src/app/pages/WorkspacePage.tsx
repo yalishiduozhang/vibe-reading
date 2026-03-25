@@ -55,6 +55,7 @@ import { ideaTags, readingIntents } from '../../features/reader/types'
 
 const repoStorageKey = 'openviberead.repo-source.v1'
 const allPapersFilterLabel = 'All papers'
+const allSnapshotPapersFilterLabel = 'All snapshot papers'
 const allTagsFilterLabel = 'All tags'
 const timeFilters = ['All time', 'Last 24h', 'Last 7d'] as const
 
@@ -108,6 +109,10 @@ export default function WorkspacePage() {
   const [composerSnapshots, setComposerSnapshots] = useState<StoredComposerSnapshot[]>(() =>
     loadStoredComposerSnapshots(),
   )
+  const [snapshotSearchQuery, setSnapshotSearchQuery] = useState('')
+  const [snapshotDocumentFilter, setSnapshotDocumentFilter] = useState(allSnapshotPapersFilterLabel)
+  const [editingSnapshotId, setEditingSnapshotId] = useState('')
+  const [editingSnapshotName, setEditingSnapshotName] = useState('')
   const [repoIndex, setRepoIndex] = useState<GitHubRepoIndex | null>(null)
   const [repoIndexError, setRepoIndexError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -309,6 +314,21 @@ export default function WorkspacePage() {
   const ideaDraft = buildIdeaDocumentDraft(selectedIdeas, draftMode)
   const composerFileName = buildIdeaDraftFileName(ideaDraft.title)
   const composerSelectionKey = buildComposerSelectionKey(selectedIdeaIds, draftMode)
+  const snapshotDocuments = Array.from(
+    new Set(composerSnapshots.map((snapshot) => getSnapshotDocumentName(snapshot))),
+  ).sort((left, right) => left.localeCompare(right))
+  const filteredComposerSnapshots = composerSnapshots
+    .filter((snapshot) => matchesSnapshotSearch(snapshot, snapshotSearchQuery))
+    .filter(
+      (snapshot) =>
+        snapshotDocumentFilter === allSnapshotPapersFilterLabel ||
+        getSnapshotDocumentName(snapshot) === snapshotDocumentFilter,
+    )
+    .sort((left, right) => {
+      const leftTime = new Date(left.updatedAt).getTime()
+      const rightTime = new Date(right.updatedAt).getTime()
+      return rightTime - leftTime
+    })
   const pageStatus = documentProxy ? `Page ${currentPage} / ${documentProxy.numPages}` : 'No PDF loaded'
   const isRenderingPage =
     Boolean(documentProxy) &&
@@ -320,6 +340,15 @@ export default function WorkspacePage() {
       setIdeaDocumentFilter(allPapersFilterLabel)
     }
   }, [ideaDocumentFilter, ideaDocuments])
+
+  useEffect(() => {
+    if (
+      !snapshotDocuments.includes(snapshotDocumentFilter) &&
+      snapshotDocumentFilter !== allSnapshotPapersFilterLabel
+    ) {
+      setSnapshotDocumentFilter(allSnapshotPapersFilterLabel)
+    }
+  }, [snapshotDocumentFilter, snapshotDocuments])
 
   useEffect(() => {
     if (!selectedIdeas.length) {
@@ -713,6 +742,8 @@ export default function WorkspacePage() {
 
     const snapshotName = composerSnapshotName.trim() || ideaDraft.title
     const updatedAt = new Date().toISOString()
+    const documentName = deriveSnapshotDocumentName(selectedIdeas)
+    const ideaTags = deriveSnapshotIdeaTags(selectedIdeas)
 
     setComposerSnapshots((currentSnapshots) => {
       const existingSnapshot = currentSnapshots.find(
@@ -727,6 +758,8 @@ export default function WorkspacePage() {
             selectedIdeaIds: [...selectedIdeaIds],
             markdown: composerMarkdown,
             updatedAt,
+            documentName,
+            ideaTags,
           },
           ...currentSnapshots.filter((snapshot) => snapshot.id !== existingSnapshot.id),
         ]
@@ -741,6 +774,8 @@ export default function WorkspacePage() {
           draftMode,
           markdown: composerMarkdown,
           updatedAt,
+          documentName,
+          ideaTags,
         },
         ...currentSnapshots,
       ]
@@ -764,10 +799,66 @@ export default function WorkspacePage() {
   }
 
   function handleDeleteComposerSnapshot(snapshotId: string) {
+    if (editingSnapshotId === snapshotId) {
+      setEditingSnapshotId('')
+      setEditingSnapshotName('')
+    }
+
     setComposerSnapshots((currentSnapshots) =>
       currentSnapshots.filter((snapshot) => snapshot.id !== snapshotId),
     )
     setComposerStatus('Snapshot deleted.')
+  }
+
+  function handleStartComposerSnapshotRename(snapshot: StoredComposerSnapshot) {
+    setEditingSnapshotId(snapshot.id)
+    setEditingSnapshotName(snapshot.name)
+  }
+
+  function handleCancelComposerSnapshotRename() {
+    setEditingSnapshotId('')
+    setEditingSnapshotName('')
+  }
+
+  function handleSaveComposerSnapshotRename(snapshot: StoredComposerSnapshot) {
+    const nextName = editingSnapshotName.trim()
+    if (!nextName) {
+      setComposerStatus('Snapshot name cannot be empty.')
+      return
+    }
+
+    const hasConflict = composerSnapshots.some(
+      (currentSnapshot) =>
+        currentSnapshot.id !== snapshot.id &&
+        currentSnapshot.selectionKey === snapshot.selectionKey &&
+        currentSnapshot.name === nextName,
+    )
+
+    if (hasConflict) {
+      setComposerStatus(`A snapshot named "${nextName}" already exists for this draft selection.`)
+      return
+    }
+
+    const updatedAt = new Date().toISOString()
+    setComposerSnapshots((currentSnapshots) => {
+      const targetSnapshot = currentSnapshots.find((currentSnapshot) => currentSnapshot.id === snapshot.id)
+      if (!targetSnapshot) {
+        return currentSnapshots
+      }
+
+      return [
+        {
+          ...targetSnapshot,
+          name: nextName,
+          updatedAt,
+        },
+        ...currentSnapshots.filter((currentSnapshot) => currentSnapshot.id !== snapshot.id),
+      ]
+    })
+    setComposerSnapshotName(nextName)
+    setEditingSnapshotId('')
+    setEditingSnapshotName('')
+    setComposerStatus(`Renamed snapshot to "${nextName}".`)
   }
 
   function hydrateCachedSnapshot(
@@ -1217,7 +1308,9 @@ export default function WorkspacePage() {
                           <strong>{decision.symbol}</strong>
                           <span>{decision.confidence}</span>
                         </div>
-                        <p className="candidate-path">{decision.path}</p>
+                        <p className="candidate-path">
+                          {formatCodeTargetPath(decision.path, decision.lineNumber)}
+                        </p>
                         <p>{decision.paragraphLabel}</p>
                         <div className="candidate-actions">
                           <button
@@ -1256,12 +1349,14 @@ export default function WorkspacePage() {
                 {codeBacklinkGroups.length ? (
                   <div className="saved-mapping-list">
                     {codeBacklinkGroups.map((group) => (
-                      <article key={group.path} className="candidate-card candidate-card-compact">
+                      <article key={group.key} className="candidate-card candidate-card-compact">
                         <div className="candidate-head">
                           <strong>{group.symbol}</strong>
                           <span>{group.paragraphs.length} linked paragraphs</span>
                         </div>
-                        <p className="candidate-path">{group.path}</p>
+                        <p className="candidate-path">
+                          {formatCodeTargetPath(group.path, group.lineNumber)}
+                        </p>
                         <div className="candidate-actions">
                           {group.targetUrl ? (
                             <a
@@ -1316,7 +1411,9 @@ export default function WorkspacePage() {
                             <strong>{candidate.symbol}</strong>
                             <span>{candidate.confidence}</span>
                           </div>
-                          <p className="candidate-path">{candidate.path}</p>
+                          <p className="candidate-path">
+                            {formatCodeTargetPath(candidate.path, candidate.lineNumber)}
+                          </p>
                           <p>{candidate.reason}</p>
                           <div className="candidate-actions">
                             {candidate.targetUrl ? (
@@ -1678,38 +1775,110 @@ export default function WorkspacePage() {
             <section className="context-card-block composer-card">
               <div className="context-block-head">
                 <h3>Saved Draft Snapshots</h3>
-                <span>{composerSnapshots.length} snapshots</span>
+                <span>
+                  {filteredComposerSnapshots.length} / {composerSnapshots.length} visible
+                </span>
               </div>
               {composerSnapshots.length ? (
-                <div className="saved-mapping-list">
-                  {composerSnapshots.map((snapshot) => (
+                <div className="idea-filter-grid">
+                  <label className="control-group">
+                    <span>Search</span>
+                    <input
+                      placeholder="Find snapshot name or tag"
+                      value={snapshotSearchQuery}
+                      onChange={(event) => setSnapshotSearchQuery(event.target.value)}
+                    />
+                  </label>
+                  <label className="control-group">
+                    <span>Paper</span>
+                    <select
+                      value={snapshotDocumentFilter}
+                      onChange={(event) => setSnapshotDocumentFilter(event.target.value)}
+                    >
+                      <option value={allSnapshotPapersFilterLabel}>{allSnapshotPapersFilterLabel}</option>
+                      {snapshotDocuments.map((documentName) => (
+                        <option key={documentName} value={documentName}>
+                          {documentName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              ) : null}
+              {composerSnapshots.length ? (
+                filteredComposerSnapshots.length ? (
+                  <div className="saved-mapping-list">
+                    {filteredComposerSnapshots.map((snapshot) => (
                     <article key={snapshot.id} className="candidate-card candidate-card-compact">
                       <div className="candidate-head">
                         <strong>{snapshot.name}</strong>
                         <span>{snapshot.draftMode}</span>
                       </div>
                       <p className="candidate-path">
-                        {`${snapshot.selectedIdeaIds.length} ideas / updated ${formatIdeaTime(snapshot.updatedAt)}`}
+                        {getSnapshotDocumentName(snapshot)}
                       </p>
-                      <div className="candidate-actions">
-                        <button
-                          className="ghost-button ghost-button-small"
-                          onClick={() => handleLoadComposerSnapshot(snapshot)}
-                          type="button"
-                        >
-                          Load Snapshot
-                        </button>
-                        <button
-                          className="ghost-button ghost-button-small"
-                          onClick={() => handleDeleteComposerSnapshot(snapshot.id)}
-                          type="button"
-                        >
-                          Delete Snapshot
-                        </button>
-                      </div>
+                      <p>
+                        {`${snapshot.selectedIdeaIds.length} ideas / ${getSnapshotTagSummary(snapshot)} / updated ${formatIdeaTime(snapshot.updatedAt)}`}
+                      </p>
+                      {editingSnapshotId === snapshot.id ? (
+                        <>
+                          <label className="control-group control-group-wide">
+                            <span>Rename Snapshot</span>
+                            <input
+                              value={editingSnapshotName}
+                              onChange={(event) => setEditingSnapshotName(event.target.value)}
+                            />
+                          </label>
+                          <div className="candidate-actions">
+                            <button
+                              className="ghost-button ghost-button-small"
+                              onClick={() => handleSaveComposerSnapshotRename(snapshot)}
+                              type="button"
+                            >
+                              Save Name
+                            </button>
+                            <button
+                              className="ghost-button ghost-button-small"
+                              onClick={handleCancelComposerSnapshotRename}
+                              type="button"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="candidate-actions">
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleLoadComposerSnapshot(snapshot)}
+                            type="button"
+                          >
+                            Load Snapshot
+                          </button>
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleStartComposerSnapshotRename(snapshot)}
+                            type="button"
+                          >
+                            Rename
+                          </button>
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleDeleteComposerSnapshot(snapshot.id)}
+                            type="button"
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </article>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-inline-state">
+                    No snapshots match the current snapshot filters.
+                  </div>
+                )
               ) : (
                 <div className="empty-inline-state">
                   Save a named snapshot when you want to keep multiple draft
@@ -1731,9 +1900,11 @@ type ContextFieldBlockProps = {
 }
 
 type CodeBacklinkGroup = {
+  key: string
   symbol: string
   path: string
   targetUrl?: string
+  lineNumber?: number
   paragraphs: StoredCodeLinkDecision[]
 }
 
@@ -1832,6 +2003,14 @@ function formatIdeaTime(value: string): string {
   })
 }
 
+function formatCodeTargetPath(path: string, lineNumber?: number): string {
+  if (!lineNumber) {
+    return path
+  }
+
+  return `${path} · L${lineNumber}`
+}
+
 function summarizeRepoSnippet(text: string): string {
   const normalized = text.replace(/\s+/g, ' ').trim()
   if (!normalized) {
@@ -1857,6 +2036,18 @@ function getIdeaDocumentName(idea: StoredIdea): string {
   return idea.documentName?.trim() || 'Unknown paper'
 }
 
+function getSnapshotDocumentName(snapshot: StoredComposerSnapshot): string {
+  return snapshot.documentName?.trim() || 'Unknown paper'
+}
+
+function getSnapshotTagSummary(snapshot: StoredComposerSnapshot): string {
+  if (!snapshot.ideaTags?.length) {
+    return 'No tags'
+  }
+
+  return snapshot.ideaTags.join(', ')
+}
+
 function matchesIdeaSearch(idea: StoredIdea, rawQuery: string): boolean {
   const query = rawQuery.trim().toLowerCase()
   if (!query) {
@@ -1869,6 +2060,20 @@ function matchesIdeaSearch(idea: StoredIdea, rawQuery: string): boolean {
     idea.paragraphId,
     getIdeaDocumentName(idea),
     idea.tag,
+  ].some((field) => field.toLowerCase().includes(query))
+}
+
+function matchesSnapshotSearch(snapshot: StoredComposerSnapshot, rawQuery: string): boolean {
+  const query = rawQuery.trim().toLowerCase()
+  if (!query) {
+    return true
+  }
+
+  return [
+    snapshot.name,
+    snapshot.draftMode,
+    getSnapshotDocumentName(snapshot),
+    ...(snapshot.ideaTags ?? []),
   ].some((field) => field.toLowerCase().includes(query))
 }
 
@@ -1895,16 +2100,41 @@ function buildComposerSelectionKey(selectedIds: string[], mode: DraftMode): stri
   return `${mode}::${normalizedIds.join(',')}`
 }
 
+function deriveSnapshotDocumentName(ideas: StoredIdea[]): string {
+  const documents = Array.from(new Set(ideas.map((idea) => getIdeaDocumentName(idea))))
+  if (!documents.length) {
+    return 'Unknown paper'
+  }
+
+  if (documents.length === 1) {
+    return documents[0]
+  }
+
+  return `Mixed papers (${documents.length})`
+}
+
+function deriveSnapshotIdeaTags(ideas: StoredIdea[]): IdeaTag[] {
+  const tags = Array.from(new Set(ideas.map((idea) => idea.tag)))
+  return ideaTags.filter((tag) => tags.includes(tag))
+}
+
+function buildCodeBacklinkGroupKey(decision: StoredCodeLinkDecision): string {
+  return decision.targetUrl ?? `${decision.path}::${decision.symbol}::${decision.lineNumber ?? 'file'}`
+}
+
 function buildCodeBacklinkGroups(decisions: StoredCodeLinkDecision[]): CodeBacklinkGroup[] {
   const groups = new Map<string, CodeBacklinkGroup>()
 
   for (const decision of decisions) {
-    const group = groups.get(decision.path)
+    const groupKey = buildCodeBacklinkGroupKey(decision)
+    const group = groups.get(groupKey)
     if (!group) {
-      groups.set(decision.path, {
+      groups.set(groupKey, {
+        key: groupKey,
         symbol: decision.symbol,
         path: decision.path,
         targetUrl: decision.targetUrl,
+        lineNumber: decision.lineNumber,
         paragraphs: [decision],
       })
       continue
@@ -1912,6 +2142,10 @@ function buildCodeBacklinkGroups(decisions: StoredCodeLinkDecision[]): CodeBackl
 
     if (!group.targetUrl && decision.targetUrl) {
       group.targetUrl = decision.targetUrl
+    }
+
+    if (!group.lineNumber && decision.lineNumber) {
+      group.lineNumber = decision.lineNumber
     }
 
     if (!group.paragraphs.some((paragraph) => paragraph.paragraphId === decision.paragraphId)) {
@@ -1926,6 +2160,8 @@ function buildCodeBacklinkGroups(decisions: StoredCodeLinkDecision[]): CodeBackl
     }))
     .sort(
       (left, right) =>
-        right.paragraphs.length - left.paragraphs.length || left.path.localeCompare(right.path),
+        right.paragraphs.length - left.paragraphs.length ||
+        left.path.localeCompare(right.path) ||
+        (left.lineNumber ?? 0) - (right.lineNumber ?? 0),
     )
 }

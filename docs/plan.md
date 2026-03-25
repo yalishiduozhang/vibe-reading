@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 17:13 (Asia/Shanghai)  
+最后更新：2026-03-25 17:30 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -995,6 +995,67 @@ AI 任务拆分为：
 - 继续推进 `M5`：评估快照是否升级为正式 draft 实体，并补充更强的命名与组织能力
 - 继续推进 `WP-H`：逐步把页面层状态往 feature 边界下沉
 
+
+### 2026-03-25 17:24 / Phase 4 symbol target pass
+
+#### 已完成
+
+- 为 `CodeCandidate` 与 confirmation memory 补上可选的 `lineNumber`
+- GitHub indexed candidate 现在会从已抓取的关键文件中抽取 `class` / `def` / `function` / 常见导出定义，做第二轮 symbol 匹配
+- 当前候选会优先显示更具体的 symbol，并在可识别时落到 `#L<line>` 级别 GitHub deep link
+- Code-side backlink 的聚合键已从“同文件”收紧到“同代码目标”，避免不同 symbol 混在一个回链组里
+- Code 面板中的 active candidate、confirmation memory、code backlink 都开始显式展示 `Lxx` 定位
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 已不再只停在 file-level deep link；对于已索引的 GitHub 关键文件，prototype 现在具备最小的 symbol / line 级目标定位能力
+- 当前论文 -> 代码 -> 论文的双向链路已经更具体，确认记忆也从“文件记忆”收敛成“目标记忆”
+- 这轮推进回答了此前关于 `M4` 是否需要停在文件级深链的开放问题：当前执行线应继续保留 file fallback，但默认优先 symbol / line 目标
+
+#### 遇到的问题
+
+- 现有 symbol 抽取仍是启发式正则，暂时只覆盖常见 Python / JS / TS 定义形态
+- line-level 定位只在远程索引到源码文本的情况下可用，sample fallback 和本地 repo bridge 仍可能退回 file-level
+- 候选排序仍未做跨样本回归，第二样本验证还没补上
+
+#### 下一步
+
+- 继续推进 `M4`：补第二样本回归，观察当前 symbol ranking 在 LoRA / CLIP 上是否稳定
+- 继续推进 `M4`：评估是否为 repo index 增加更强的 symbol cache / snippet 展示
+- 继续推进 `M5`：继续评估 snapshot 是否升级为正式 draft 实体，并补强组织能力
+
+
+### 2026-03-25 17:30 / Phase 5 snapshot organization pass
+
+#### 已完成
+
+- 为 Composer snapshot 补上 paper 和 tag 元数据，保存时开始记录当前选中 idea 集的文档归属与标签分布
+- Saved Draft Snapshots 新增 search / paper filter，开始支持按名称、标签和论文维度筛选
+- snapshot 卡片现在会显示所属 paper、标签摘要和更新时间，不再只有名称和 mode
+- 新增 snapshot rename 流程，支持对已保存的 snapshot 重命名并做同 selection 下的重名冲突检查
+- 继续完成 `npm run build`
+- 继续完成 `npm run lint`
+
+#### 当前判断
+
+- `M5` 已经不再只是“能保存多个快照”，而是开始具备轻量 draft library 的组织能力
+- 当前 snapshot 仍不是完整 draft 实体，但它已经逐步具备元信息、过滤和管理动作，离正式文档层更近了一步
+- 这条路径继续符合前面关于 Local-first 和 lightweight snapshot 的执行策略，没有过早引入更重的数据模型
+
+#### 遇到的问题
+
+- snapshot 目前仍没有正文级别的独立列表页、归档状态和备注字段
+- 当前组织能力仍建立在 localStorage 上，后续若继续扩展为更正式的 draft library，需要提前考虑迁移边界
+- 现有 snapshot 管理还没有和代码联动结果形成更强的 cross-link
+
+#### 下一步
+
+- 继续推进 `M4`：补第二样本回归与更稳定的 symbol ranking
+- 继续推进 `M5`：评估 snapshot 是否升级为正式 draft 实体，并补充备注、归档或更强的组织动作
+- 继续推进 `WP-H`：把 snapshot / confirmation memory 等状态继续下沉到更清晰的 feature store
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1165,16 +1226,33 @@ AI 任务拆分为：
 - 这样可以先验证用户是否真的需要保存多个版本，而不会过早把状态模型做重。
 - 这条路径能与当前 active draft 恢复机制兼容，推进成本更低，也更容易继续迭代。
 
+### D-019（2026-03-25）
+
+决定：`M4` 的当前执行标准不再接受“只做到文件级深链就停止”，而是采用“默认优先 symbol / line，文件级作为回退”的路径。
+
+原因：
+
+- 仅有 file-level deep link 时，confirmation memory 和 code backlink 仍然过粗，无法形成更可信的代码目标记忆。
+- 先做最小的 symbol / line 启发式定位，已经足够把 `M4` 从“能打开文件”推进到“更具体地打开代码目标”。
+
+### D-020（2026-03-25）
+
+决定：在是否升级为正式 draft 实体尚未定案前，先把 `named snapshots` 扩展为带元数据、可筛选、可重命名的轻量 draft library。
+
+原因：
+
+- 这样可以继续补 `M5` 的真实管理动作，而不需要立刻引入更重的文档模型和列表页。
+- 这条路径能保留当前 Local-first 结构，并为后续是否升级成正式 draft 实体提供更明确的使用证据。
+
 ## 16. 当前开放问题
 
 这些问题不阻塞当前执行，但会影响后续 Phase 3 到 Phase 5 的细化实现：
 
 1. Reader Core 的段落切分第一版只用规则，还是直接引入 Docling？
-2. `M4` 的第一轮通过标准是否接受“文件级深链”，还是必须补到更明确的函数 / 符号级跳转？
-3. 第一版图表解释是否进 Phase 6，还是提前做一个轻量版？
-4. 桌面壳何时介入，是否在 Web 原型稳定后再评估？
-5. Web-first 原型里，本地仓库读取是先通过后端桥接，还是先以 GitHub URL 演示为主？
-6. `named snapshots` 是否已经足够，还是需要升级为真正的 draft 实体与列表页？
+2. 第一版图表解释是否进 Phase 6，还是提前做一个轻量版？
+3. 桌面壳何时介入，是否在 Web 原型稳定后再评估？
+4. Web-first 原型里，本地仓库读取是先通过后端桥接，还是先以 GitHub URL 演示为主？
+5. `named snapshots` 加上元数据与管理动作后是否已经足够，还是仍需要升级为真正的 draft 实体与列表页？
 
 ## 17. 审批后的固定规则
 
@@ -1190,7 +1268,7 @@ AI 任务拆分为：
 接下来应按以下顺序继续：
 
 1. 继续深化 GitHub 远程索引：补强 artifact 排序、文件跳转与缓存策略。
-2. 继续推进 Code Link：从最小代码侧回链走向更细粒度的目标定位。
+2. 继续推进 Code Link：从已有的 symbol / line 目标定位走向第二样本回归与更稳的 ranking。
 3. 继续补强 Idea Workspace：评估 snapshot 是否升级为正式 draft 实体，并继续收敛组织能力。
 4. 评估是否把 repo index / confirmation memory / composer selection / idea storage 继续抽成独立 store，推进 WP-H。
 5. 评估是否需要把主样本之外的 LoRA / CLIP 作为回归样本加入验证。

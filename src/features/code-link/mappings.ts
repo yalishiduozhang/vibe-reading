@@ -17,6 +17,7 @@ export type StoredCodeLinkDecision = {
   symbol: string
   path: string
   targetUrl?: string
+  lineNumber?: number
   reason: string
   confidence: CodeCandidate['confidence']
   createdAt: string
@@ -41,6 +42,7 @@ export function buildCodeLinkDecision(
     symbol: candidate.symbol,
     path: candidate.path,
     targetUrl: candidate.targetUrl,
+    lineNumber: candidate.lineNumber,
     reason: candidate.reason,
     confidence: candidate.confidence,
     createdAt: new Date().toISOString(),
@@ -48,7 +50,7 @@ export function buildCodeLinkDecision(
 }
 
 export function getCandidateDecisionKey(candidate: CodeCandidate, paragraph: ReaderParagraph): string {
-  return `${paragraph.id}::${candidate.symbol}::${candidate.path}`
+  return `${paragraph.id}::${candidate.symbol}::${candidate.path}::${candidate.lineNumber ?? 'file'}`
 }
 
 export function loadStoredCodeLinkDecisions(): StoredCodeLinkDecision[] {
@@ -99,6 +101,7 @@ function isStoredCodeLinkDecision(value: unknown): value is StoredCodeLinkDecisi
     typeof candidate.symbol === 'string' &&
     typeof candidate.path === 'string' &&
     (candidate.targetUrl === undefined || typeof candidate.targetUrl === 'string') &&
+    (candidate.lineNumber === undefined || typeof candidate.lineNumber === 'number') &&
     typeof candidate.reason === 'string' &&
     typeof candidate.confidence === 'string' &&
     typeof candidate.createdAt === 'string'

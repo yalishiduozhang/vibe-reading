@@ -2,6 +2,18 @@ import type { CodeCandidate, ReaderParagraph } from '../reader/types'
 import type { DemoSample } from './demoSamples'
 import type { GitHubRepoFile, GitHubRepoIndex } from './github'
 
+type ExtractedCodeSymbol = {
+  name: string
+  lineNumber: number
+}
+
+type RankedSymbolMatch = {
+  name: string
+  lineNumber: number
+  score: number
+  matches: string[]
+}
+
 export function buildCodeCandidates(
   paragraph: ReaderParagraph | null,
   repoSource: string,
@@ -67,11 +79,12 @@ function buildIndexedCodeCandidates(
 
   return rankedArtifacts.map((artifact, index) => ({
     id: `${paragraph.id}-indexed-${index + 1}`,
-    symbol: artifact.file.name,
+    symbol: artifact.symbolMatch?.name ?? artifact.file.name,
     path: buildRepoPath(repoIndex.repoUrl, artifact.file.path),
     reason: buildIndexedReason(artifact.matches, artifact.file.path),
     confidence: mapScoreToConfidence(artifact.score),
-    targetUrl: artifact.file.htmlUrl,
+    targetUrl: buildArtifactTargetUrl(artifact.file.htmlUrl, artifact.symbolMatch?.lineNumber),
+    lineNumber: artifact.symbolMatch?.lineNumber,
   }))
 }
 
@@ -122,10 +135,17 @@ function rankFileAgainstParagraph(
     matches.push('prompt language matched an interaction file')
   }
 
+  const symbolMatch = rankSymbolsAgainstParagraph(file, paragraphTerms, paragraphText)
+  if (symbolMatch) {
+    score += symbolMatch.score
+    matches.push(...symbolMatch.matches)
+  }
+
   return {
     file,
     matches,
     score,
+    symbolMatch,
   }
 }
 
@@ -248,12 +268,15 @@ function buildSampleCodeCandidates(
 
 function extractTerms(text: string): string[] {
   const titleCaseMatches = text.match(/\b[A-Z][A-Za-z0-9-]{2,}\b/g) ?? []
+  const codeStyleMatches = text.match(/\b(?:[a-z]+_[a-z0-9_]+|[a-z]+(?:[A-Z][a-z0-9]+)+)\b/g) ?? []
   const lowercaseKeywords =
     text
       .toLowerCase()
-      .match(/\b(model|dataset|training|module|loss|encoder|decoder|experiment|prompt|retrieval)\b/g) ?? []
+      .match(
+        /\b(model|dataset|training|module|loss|encoder|decoder|experiment|prompt|retrieval|mask|attention|adapter|segmentation|image|text)\b/g,
+      ) ?? []
 
-  const uniqueTerms = new Set([...titleCaseMatches, ...lowercaseKeywords])
+  const uniqueTerms = new Set([...titleCaseMatches, ...codeStyleMatches, ...lowercaseKeywords])
   return Array.from(uniqueTerms).slice(0, 5)
 }
 
@@ -268,7 +291,11 @@ function buildRepoPath(repoSource: string, relativePath: string): string {
   return `${trimmedSource}/${trimmedPath}`
 }
 
-function buildRepoTargetUrl(repoSource: string, relativePath: string): string | undefined {
+function buildRepoTargetUrl(
+  repoSource: string,
+  relativePath: string,
+  lineNumber?: number,
+): string | undefined {
   const trimmedSource = repoSource.trim().replace(/\/+$/, '')
   if (!/^https?:\/\/github\.com\/[^/]+\/[^/]+$/i.test(trimmedSource)) {
     return undefined
@@ -280,7 +307,136 @@ function buildRepoTargetUrl(repoSource: string, relativePath: string): string | 
   }
 
   const route = relativePath.endsWith('/') ? 'tree' : 'blob'
-  return `${trimmedSource}/${route}/HEAD/${normalizedPath}`
+  const baseUrl = `${trimmedSource}/${route}/HEAD/${normalizedPath}`
+  return lineNumber ? `${baseUrl}#L${lineNumber}` : baseUrl
+}
+
+function buildArtifactTargetUrl(fileHtmlUrl: string, lineNumber?: number): string {
+  return lineNumber ? `${fileHtmlUrl}#L${lineNumber}` : fileHtmlUrl
+}
+
+function rankSymbolsAgainstParagraph(
+  file: GitHubRepoFile,
+  paragraphTerms: string[],
+  paragraphText: string,
+): RankedSymbolMatch | null {
+  const symbols = extractCodeSymbols(file.text)
+  if (!symbols.length) {
+    return null
+  }
+
+  const rankedSymbols = symbols
+    .map((symbol) => rankSymbolAgainstParagraph(symbol, paragraphTerms, paragraphText))
+    .filter((symbol) => symbol.score > 0)
+    .sort((left, right) => right.score - left.score || left.lineNumber - right.lineNumber)
+
+  return rankedSymbols[0] ?? null
+}
+
+function rankSymbolAgainstParagraph(
+  symbol: ExtractedCodeSymbol,
+  paragraphTerms: string[],
+  paragraphText: string,
+): RankedSymbolMatch {
+  const loweredParagraphText = paragraphText.toLowerCase()
+  const loweredSymbol = symbol.name.toLowerCase()
+  const symbolTokens = splitSymbolTokens(symbol.name)
+  const matches = new Set<string>()
+  let score = 0
+
+  if (loweredParagraphText.includes(loweredSymbol)) {
+    score += 8
+    matches.add(`${symbol.name} matched paragraph text at L${symbol.lineNumber}`)
+  }
+
+  for (const term of paragraphTerms) {
+    const loweredTerm = term.toLowerCase()
+
+    if (loweredSymbol === loweredTerm) {
+      score += 6
+      matches.add(`${term} matched symbol name at L${symbol.lineNumber}`)
+      continue
+    }
+
+    if (loweredSymbol.includes(loweredTerm) || symbolTokens.includes(loweredTerm)) {
+      score += 4
+      matches.add(`${term} matched symbol token at L${symbol.lineNumber}`)
+    }
+  }
+
+  if (loweredParagraphText.includes('decoder') && symbolTokens.includes('decoder')) {
+    score += 2
+    matches.add(`decoder language matched ${symbol.name} at L${symbol.lineNumber}`)
+  }
+
+  if (loweredParagraphText.includes('encoder') && symbolTokens.includes('encoder')) {
+    score += 2
+    matches.add(`encoder language matched ${symbol.name} at L${symbol.lineNumber}`)
+  }
+
+  if (loweredParagraphText.includes('mask') && symbolTokens.includes('mask')) {
+    score += 2
+    matches.add(`mask language matched ${symbol.name} at L${symbol.lineNumber}`)
+  }
+
+  if (loweredParagraphText.includes('prompt') && symbolTokens.some((token) => /prompt|predict/.test(token))) {
+    score += 2
+    matches.add(`prompt language matched ${symbol.name} at L${symbol.lineNumber}`)
+  }
+
+  return {
+    name: symbol.name,
+    lineNumber: symbol.lineNumber,
+    score,
+    matches: Array.from(matches).slice(0, 3),
+  }
+}
+
+function extractCodeSymbols(text: string): ExtractedCodeSymbol[] {
+  const symbols: ExtractedCodeSymbol[] = []
+  const seen = new Set<string>()
+  const lines = text.split('\n')
+
+  for (const [index, line] of lines.entries()) {
+    const patterns = [
+      /^\s*def\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/,
+      /^\s*class\s+([A-Za-z_][A-Za-z0-9_]*)\b/,
+      /^\s*(?:export\s+default\s+)?(?:export\s+)?(?:async\s+)?function\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(/,
+      /^\s*(?:export\s+)?class\s+([A-Za-z_][A-Za-z0-9_]*)\b/,
+      /^\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?:async\s*)?(?:\(|<)/,
+    ]
+
+    for (const pattern of patterns) {
+      const match = line.match(pattern)
+      const name = match?.[1]
+      if (!name) {
+        continue
+      }
+
+      const key = `${name}:${index + 1}`
+      if (seen.has(key)) {
+        continue
+      }
+
+      seen.add(key)
+      symbols.push({
+        name,
+        lineNumber: index + 1,
+      })
+      break
+    }
+  }
+
+  return symbols
+}
+
+function splitSymbolTokens(name: string): string[] {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_./-]+/g, ' ')
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((token) => token.length > 2)
 }
 
 function slugify(value: string): string {

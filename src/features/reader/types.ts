@@ -79,4 +79,5 @@ export type CodeCandidate = {
   reason: string
   confidence: 'High' | 'Medium' | 'Low'
   targetUrl?: string
+  lineNumber?: number
 }
