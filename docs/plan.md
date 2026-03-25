@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:49 (Asia/Shanghai)  
+最后更新：2026-03-25 19:53 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1711,6 +1711,36 @@ AI 任务拆分为：
 - 继续推进 `M5`：评估 lineage 是否真的需要升级为更深层 tree/history
 - 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
 
+
+### 2026-03-25 19:53 / WP-H regression helper extraction pass
+
+#### 已完成
+
+- 新增 `src/features/code-link/regression.ts`
+- sample regression 的 `diagnostic classification / cache signals / refresh hint / preview building` helper 开始从 `WorkspacePage` 下沉到 feature 层
+- `WorkspacePage` 现在继续保留 warm-up 状态与交互触发，但不再定义整组 regression 推导逻辑
+- 这让 `M4` 里的 cross-sample regression 不再只是页面局部实现，开始形成可复用的 code-link feature 能力
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `WP-H` 继续向前走了一步：snapshot helper、symbol cache helper、regression helper 都已经开始从页面层回收
+- 当前 `WorkspacePage` 仍然很大，但最近这一段增长最快的复杂逻辑已经不再继续全部堆在页面底部
+- 这一步也让后续继续迭代 regression diagnostics 时更稳，因为逻辑边界已经开始明确
+
+#### 遇到的问题
+
+- 当前 warm-up 触发流程与局部状态仍然在页面层，没有继续抽成 action/store
+- repo index 状态与 confirmation memory 也还没有同步下沉
+- `regression.ts` 当前同时承载类型和 helper，后续可能还会再细分
+
+#### 下一步
+
+- 继续推进 `WP-H`：评估是否把 repo index / confirmation memory 的页面 helper 继续下沉
+- 继续推进 `M5`：评估 lineage 是否真的需要升级为更深层 tree/history
+- 继续推进 `M4`：继续打磨 cache browser，但尽量优先在 feature 层完成
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -2096,6 +2126,15 @@ AI 任务拆分为：
 
 - 当前更需要验证“用户是否真的会频繁沿 lineage 来回跳转”，而不是先投入复杂的树形页面。
 - 只展示一层 parent 和 direct derived，已经能覆盖当前 duplicate 分叉后的主要浏览需求，同时保持实现边界清晰。
+
+### D-043（2026-03-25）
+
+决定：cross-sample regression 的当前抽离先以 `regression.ts` 聚合 helper 和类型为主，不立即把 warm-up 状态机也一起抽成独立 store。
+
+原因：
+
+- 当前更需要先把推导逻辑从页面里移走，降低后续继续补诊断时的耦合；而 warm-up 的交互状态仍然和工作区 UI 紧密绑定。
+- 先拆 helper 和类型可以最小成本地推进 `WP-H`，后续再看是否真的值得上更重的状态层重构。
 
 ## 16. 当前开放问题
 
