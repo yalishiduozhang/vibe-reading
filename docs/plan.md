@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 17:30 (Asia/Shanghai)  
+最后更新：2026-03-25 17:37 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1056,6 +1056,36 @@ AI 任务拆分为：
 - 继续推进 `M5`：评估 snapshot 是否升级为正式 draft 实体，并补充备注、归档或更强的组织动作
 - 继续推进 `WP-H`：把 snapshot / confirmation memory 等状态继续下沉到更清晰的 feature store
 
+
+### 2026-03-25 17:37 / Phase 4 cross-sample regression pass
+
+#### 已完成
+
+- 在 Code 面板新增 `Cross-sample Regression` 视图，固定对当前段落同时展示 `Segment Anything / LoRA / CLIP` 三个 preset 的候选结果
+- 回归视图直接复用现有 `buildCodeCandidates` 逻辑，不额外复制第二套映射规则
+- 当前回归卡片会显示每个 sample 的 mapping-focus 命中数、top candidate、定位路径和是否使用 indexed repo
+- 对当前匹配 sample，若已完成 GitHub 远程索引，则回归视图会优先使用 indexed candidate；其余 sample 保持 preset fallback
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里原先“第二样本回归还没补上”的缺口已经开始收口，当前 prototype 至少具备了段落级的跨样本可视化对照入口
+- 这让 candidate ranking 的变化不再只能靠手动切 sample 检查，后续调 ranking 时可以直接在同一段落下观察 SAM / LoRA / CLIP 的差异
+- 当前这一步更像是把“回归验证能力”内建到产品原型里，而不是仅靠一次性人工验收
+
+#### 遇到的问题
+
+- 当前回归仍以 top candidate 预览为主，还没有形成更系统的 ranking score 面板
+- 非当前匹配 sample 仍主要走 preset fallback，尚未接入它们各自的真实远程索引结果
+- 回归视图目前是观察入口，还没有自动记录“哪个 sample 更稳定”这类统计结论
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否把 LoRA / CLIP 的真实 GitHub 索引也纳入同一回归链路
+- 继续推进 `M4`：在不让 UI 过重的前提下补更明确的 ranking signal / snippet 展示
+- 继续推进 `M5`：继续评估 snapshot 是否升级为正式 draft 实体，并补更强的组织动作
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1243,6 +1273,15 @@ AI 任务拆分为：
 
 - 这样可以继续补 `M5` 的真实管理动作，而不需要立刻引入更重的文档模型和列表页。
 - 这条路径能保留当前 Local-first 结构，并为后续是否升级成正式 draft 实体提供更明确的使用证据。
+
+### D-021（2026-03-25）
+
+决定：第二样本回归先以内建的 `Cross-sample Regression` 视图落地，而不是另做独立测试页面或离线脚本。
+
+原因：
+
+- 这样可以直接复用当前 `buildCodeCandidates` 主链路，让回归观察和真实产品行为保持一致。
+- 在 `M4` 尚未封板前，把回归入口放进工作区本身，比维护另一套专用验证界面更稳妥。
 
 ## 16. 当前开放问题
 

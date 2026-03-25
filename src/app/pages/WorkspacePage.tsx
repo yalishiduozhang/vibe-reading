@@ -8,6 +8,7 @@ import {
   getDemoSampleById,
   matchDemoSampleBySource,
   primaryDemoSampleId,
+  type DemoSample,
   type DemoSampleId,
 } from '../../features/code-link/demoSamples'
 import {
@@ -287,6 +288,11 @@ export default function WorkspacePage() {
     (decision) => decision.repoSource === effectiveRepoSource && decision.decision === 'confirmed',
   )
   const codeBacklinkGroups = buildCodeBacklinkGroups(repoConfirmedDecisions)
+  const sampleRegressionPreviews = buildSampleRegressionPreviews(
+    selectedParagraph,
+    matchedDemoSample,
+    repoIndex,
+  )
   const paragraphRejectedCount = selectedParagraph
     ? codeLinkDecisions.filter(
         (decision) =>
@@ -1297,6 +1303,67 @@ export default function WorkspacePage() {
               </section>
               <section className="context-card-block repo-analysis-block">
                 <div className="context-block-head">
+                  <h3>Cross-sample Regression</h3>
+                  <span>{sampleRegressionPreviews.length} presets</span>
+                </div>
+                {selectedParagraph ? (
+                  <div className="saved-mapping-list">
+                    {sampleRegressionPreviews.map((preview) => (
+                      <article key={preview.sample.id} className="candidate-card candidate-card-compact">
+                        <div className="candidate-head">
+                          <strong>{preview.sample.label}</strong>
+                          <span>{preview.usesIndexedRepo ? 'Indexed' : 'Preset'}</span>
+                        </div>
+                        <p className="candidate-path">
+                          {preview.focusMatchCount
+                            ? `${preview.focusMatchCount} mapping-focus hits`
+                            : 'No direct mapping-focus hit'}
+                        </p>
+                        {preview.topCandidate ? (
+                          <>
+                            <p>
+                              {preview.topCandidate.symbol}
+                              {' · '}
+                              {preview.topCandidate.confidence}
+                            </p>
+                            <p className="candidate-path">
+                              {formatCodeTargetPath(
+                                preview.topCandidate.path,
+                                preview.topCandidate.lineNumber,
+                              )}
+                            </p>
+                            <p>{preview.topCandidate.reason}</p>
+                          </>
+                        ) : (
+                          <p>No candidate generated for this paragraph under the current preset.</p>
+                        )}
+                        <div className="candidate-actions">
+                          <span className="repo-analysis-note">
+                            {preview.candidateCount} candidates
+                          </span>
+                          {preview.topCandidate?.targetUrl ? (
+                            <a
+                              className="secondary-link secondary-link-inline"
+                              href={preview.topCandidate.targetUrl}
+                              rel="noreferrer"
+                              target="_blank"
+                            >
+                              Open Top Code
+                            </a>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="empty-inline-state">
+                    Pick a paragraph first. Cross-sample regression compares how
+                    the current paragraph maps under the SAM, LoRA, and CLIP presets.
+                  </div>
+                )}
+              </section>
+              <section className="context-card-block repo-analysis-block">
+                <div className="context-block-head">
                   <h3>Confirmation Memory</h3>
                   <span>{repoConfirmedDecisions.length} confirmed</span>
                 </div>
@@ -1908,6 +1975,14 @@ type CodeBacklinkGroup = {
   paragraphs: StoredCodeLinkDecision[]
 }
 
+type SampleRegressionPreview = {
+  sample: DemoSample
+  focusMatchCount: number
+  topCandidate: CodeCandidate | null
+  candidateCount: number
+  usesIndexedRepo: boolean
+}
+
 function ContextFieldBlock({ attribution, body, title }: ContextFieldBlockProps) {
   return (
     <section className="context-card-block">
@@ -2116,6 +2191,50 @@ function deriveSnapshotDocumentName(ideas: StoredIdea[]): string {
 function deriveSnapshotIdeaTags(ideas: StoredIdea[]): IdeaTag[] {
   const tags = Array.from(new Set(ideas.map((idea) => idea.tag)))
   return ideaTags.filter((tag) => tags.includes(tag))
+}
+
+function buildSampleRegressionPreviews(
+  paragraph: ReaderParagraph | null,
+  matchedDemoSample: DemoSample,
+  repoIndex: GitHubRepoIndex | null,
+): SampleRegressionPreview[] {
+  if (!paragraph) {
+    return []
+  }
+
+  return demoSamples.map((sample) => {
+    const usesIndexedRepo = sample.id === matchedDemoSample.id && repoIndex !== null
+    const candidates = buildCodeCandidates(
+      paragraph,
+      sample.repoUrl,
+      sample,
+      usesIndexedRepo ? repoIndex : null,
+    )
+
+    return {
+      sample,
+      focusMatchCount: countSampleFocusMatches(sample, paragraph.text),
+      topCandidate: candidates[0] ?? null,
+      candidateCount: candidates.length,
+      usesIndexedRepo,
+    }
+  })
+}
+
+function countSampleFocusMatches(sample: DemoSample, paragraphText: string): number {
+  const loweredParagraph = paragraphText.toLowerCase()
+
+  return sample.mappingFocus.filter((focus) => {
+    const loweredFocus = focus.toLowerCase()
+    if (loweredParagraph.includes(loweredFocus)) {
+      return true
+    }
+
+    return loweredFocus
+      .split(/[^a-z0-9]+/)
+      .filter((token) => token.length > 2)
+      .some((token) => loweredParagraph.includes(token))
+  }).length
 }
 
 function buildCodeBacklinkGroupKey(decision: StoredCodeLinkDecision): string {
