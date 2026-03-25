@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 18:13 (Asia/Shanghai)  
+最后更新：2026-03-25 18:20 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1235,6 +1235,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否给 sample regression 增加更直接的失败详情与刷新建议
 - 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
 
+
+### 2026-03-25 18:20 / Phase 4 symbol cache pass
+
+#### 已完成
+
+- 新增 `src/features/code-link/symbols.ts`，把 symbol 提取、snippet 组装和 GitHub line target 这些能力从 `candidates.ts` 中抽出
+- 当前候选生成与 `Remote Repo Index` 开始共用同一层 symbol/snippet helper，而不是各自维护解析逻辑
+- `Remote Repo Index` 下新增 `Indexed Symbol Cache`，直接展示当前已索引 key files 中抽出的 symbol、行号和 snippet
+- 这让 repo preview 已经不只是“看文件摘要”，而是开始显式暴露索引后的代码结构缓存
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里关于 symbol / snippet cache 的组织方式已经开始落地，不再只是后续设想
+- 当前 code-link 的 repo preview、candidate generation 和 snippet 证据层开始共享同一套 helper，结构更稳
+- 这一步也让 `WP-H` 往前走了一点：symbol 解析逻辑正在从页面使用态变成 feature 级能力
+
+#### 遇到的问题
+
+- 当前 symbol cache 仍是从少量 indexed key files 中推导出来，不是完整 repo 级别
+- 还没有给 symbol cache 加筛选或搜索，当前主要服务于可视化和调试理解
+- 现有 symbol cache 仍是运行时派生，而不是持久化到 repo index 本体
+
+#### 下一步
+
+- 继续推进 `M4`：评估是否把 symbol cache 进一步并入 repo index 的持久化结构
+- 继续推进 `M4`：评估是否给 sample regression 增加更直接的失败详情与刷新建议
+- 继续推进 `M5`：继续收敛 snapshot 的组织动作与正式 draft 边界
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1476,6 +1506,15 @@ AI 任务拆分为：
 
 - 当前更需要的是让索引链路“可见、可解释”，而不是把调试界面做重。
 - 轻量信号已经足够覆盖当前 repo index 与 cross-sample regression 两个主要使用点。
+
+### D-027（2026-03-25）
+
+决定：symbol / snippet cache 第一轮先采用运行时派生 + 共享 helper 的方式组织，而不是立刻写回 repo index 持久化结构。
+
+原因：
+
+- 当前更需要先统一 candidate generation 与 repo preview 的解析逻辑，避免两套实现漂移。
+- 在 symbol cache 的字段和交互还在收敛时，先保持为派生层比过早固化到持久化结构更稳妥。
 
 ## 16. 当前开放问题
 

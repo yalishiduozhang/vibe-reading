@@ -28,6 +28,10 @@ import {
   saveStoredRepoIndexCache,
 } from '../../features/code-link/storage'
 import {
+  buildRepoSymbolCache,
+  type RepoSymbolCacheEntry,
+} from '../../features/code-link/symbols'
+import {
   buildIdeaDraftFileName,
   buildIdeaDocumentDraft,
   draftModes,
@@ -282,6 +286,7 @@ export default function WorkspacePage() {
     repoIndexCacheRef.current,
     repoIndexCacheVersion,
   )
+  const repoSymbolCacheEntries: RepoSymbolCacheEntry[] = repoIndex ? buildRepoSymbolCache(repoIndex) : []
   const repoIndexStatusSignals = repoIndex ? buildRepoIndexStatusSignals(repoIndex, repoIndexSource) : []
   const codeCandidates = buildCodeCandidates(
     selectedParagraph,
@@ -1370,6 +1375,42 @@ export default function WorkspacePage() {
                             </article>
                           ))}
                         </div>
+                        <section className="context-card-block repo-analysis-block">
+                          <div className="context-block-head">
+                            <h3>Indexed Symbol Cache</h3>
+                            <span>{repoSymbolCacheEntries.length} symbols</span>
+                          </div>
+                          {repoSymbolCacheEntries.length ? (
+                            <div className="saved-mapping-list">
+                              {repoSymbolCacheEntries.map((entry) => (
+                                <article key={entry.id} className="candidate-card candidate-card-compact">
+                                  <div className="candidate-head">
+                                    <strong>{entry.symbol}</strong>
+                                    <span>{entry.fileName}</span>
+                                  </div>
+                                  <p className="candidate-path">
+                                    {formatCodeTargetPath(entry.path, entry.lineNumber)}
+                                  </p>
+                                  <CodeSnippetPreview snippet={entry.snippet} />
+                                  <div className="candidate-actions">
+                                    <a
+                                      className="secondary-link secondary-link-inline"
+                                      href={entry.targetUrl}
+                                      rel="noreferrer"
+                                      target="_blank"
+                                    >
+                                      Open Symbol
+                                    </a>
+                                  </div>
+                                </article>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="empty-inline-state">
+                              No extractable symbols yet from the currently indexed key files.
+                            </div>
+                          )}
+                        </section>
                       </>
                     ) : (
                       <div className="empty-inline-state">
