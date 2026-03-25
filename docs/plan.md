@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:22 (Asia/Shanghai)  
+最后更新：2026-03-25 19:28 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1563,6 +1563,65 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否要给 `All cached` 增加更明确的排序方式
 - 继续推进 `WP-H`：评估是否把 snapshot/detail 操作进一步下沉出页面层
 
+
+### 2026-03-25 19:25 / Phase 4 symbol cache sort pass
+
+#### 已完成
+
+- `Indexed Symbol Cache` 新增 `Best match / Path A-Z / Symbol A-Z / Line number` 排序方式
+- 当前 `Focused hits` 和 `All cached` 两种浏览模式都会经过同一套排序层，而不再只能依赖默认缓存顺序
+- 这让 `All cached` 视图从“能展开”继续推进到“能按目标方式浏览”，更接近真正的轻量 cache browser
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M4` 里关于 symbol cache 的排序和浏览控制已经进一步收敛，repo preview 的探索路径比之前更完整
+- 当前用户已经可以按匹配优先、路径优先、符号名优先或行号顺序去检查缓存，不再被单一路径锁死
+- 这一步继续支撑 `WP-F` 和 `WP-H`：repo cache 更稳定，页面层上的调试操作也更清晰
+
+#### 遇到的问题
+
+- 当前排序仍然是前端本地规则，不涉及更复杂的多维 ranking 配置
+- `Focused hits` 下如果用户切到非 `Best match`，会更偏浏览而不是严格相关性优先
+- 目前还没有把排序选择持久化到 local storage
+
+#### 下一步
+
+- 继续推进 `M5`：评估是否要为 snapshot 增加 parent/derived 关系
+- 继续推进 `WP-H`：评估是否把 snapshot/detail 操作进一步下沉出页面层
+- 继续推进 `M4`：评估是否把 repo cache 的浏览控制继续抽成独立 helper
+
+
+### 2026-03-25 19:28 / Phase 5 snapshot relation pass
+
+#### 已完成
+
+- `StoredComposerSnapshot` 开始支持 `parentSnapshotId / parentSnapshotName`
+- `Duplicate Snapshot` 现在会记录派生来源，而不只是复制一份内容
+- snapshot detail card 和列表卡片都会显示 `derived from ...` 与 `N derived copies` 这类关系信号
+- 即使父 snapshot 后续被删除，当前派生 snapshot 也仍能通过 `parentSnapshotName` 保留来源提示
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M5` 已经从“可复制、可比较”进一步推进到“有最小关系结构”的 draft entity
+- 这一步虽然还不是完整版本链，但已经让 snapshot 不再只是平铺列表，而开始具备派生语义
+- 当前这条路径和之前的 duplicate / compare summary 能自然衔接，继续符合 Local-first 的轻量推进策略
+
+#### 遇到的问题
+
+- 当前 relation 仍然是单父节点语义，没有 root chain 或更完整的 lineage
+- 还没有基于这些关系做真正的 compare history 或 tree 视图
+- 目前派生关系主要服务于理解上下文，不会限制后续 rename/archive/delete 操作
+
+#### 下一步
+
+- 继续推进 `WP-H`：评估是否把 snapshot/detail/relation 逻辑进一步下沉出页面层
+- 继续推进 `M5`：评估是否真的需要更重的 lineage/tree 视图
+- 继续推进 `M4`：继续收敛 repo cache helper 的边界
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1903,6 +1962,24 @@ AI 任务拆分为：
 
 - 当前更需要回答的是“这个 snapshot 和我手上的 draft 差多少，值不值得 load/duplicate”，summary 已经足够支撑这个判断。
 - 先做轻量 compare 可以验证真实使用频率，再决定是否值得继续投入更重的 diff/版本关系实现。
+
+### D-038（2026-03-25）
+
+决定：symbol cache 的排序能力继续内嵌在当前 `Indexed Symbol Cache` 面板中，先用少量固定 sort mode，而不是立刻开放更复杂的自定义排序配置。
+
+原因：
+
+- 当前最重要的是让缓存浏览“足够可控”，固定的几个排序方式已经能覆盖匹配优先、路径浏览和符号浏览三种主要任务。
+- 保持为少量固定 mode，可以避免当前原型因为排序配置过多而失去清晰度。
+
+### D-039（2026-03-25）
+
+决定：snapshot 的第一轮 lineage 先采用 `parentSnapshotId + parentSnapshotName` 的轻量派生关系，而不是立即扩展为完整版本图。
+
+原因：
+
+- 当前更需要的是让 duplicate 不再是匿名复制，并让用户能看懂“这个 snapshot 从哪来、又派生出了什么”。
+- 轻量父子关系已经足够验证 snapshot 是否真的需要更重的 lineage / tree / history 视图。
 
 ## 16. 当前开放问题
 

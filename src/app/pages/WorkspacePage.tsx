@@ -70,6 +70,7 @@ const allSnapshotPapersFilterLabel = 'All snapshot papers'
 const allTagsFilterLabel = 'All tags'
 const snapshotVisibilityFilters = ['All snapshots', 'Active only', 'Archived only'] as const
 const symbolCacheViewModes = ['Focused hits', 'All cached'] as const
+const symbolCacheSortModes = ['Best match', 'Path A-Z', 'Symbol A-Z', 'Line number'] as const
 const timeFilters = ['All time', 'Last 24h', 'Last 7d'] as const
 
 type AssistTab = 'context' | 'code'
@@ -77,6 +78,7 @@ type IdeaTagFilter = IdeaTag | typeof allTagsFilterLabel
 type IdeaTimeFilter = (typeof timeFilters)[number]
 type SnapshotVisibilityFilter = (typeof snapshotVisibilityFilters)[number]
 type SymbolCacheViewMode = (typeof symbolCacheViewModes)[number]
+type SymbolCacheSortMode = (typeof symbolCacheSortModes)[number]
 type RepoIndexSource = 'none' | 'cache' | 'network'
 type SampleRegressionDiagnosticReason = 'network' | 'not-found' | 'rate-limit' | 'unsupported' | 'unknown'
 type SampleRegressionDiagnostic = {
@@ -146,6 +148,7 @@ export default function WorkspacePage() {
   const [repoIndexCacheVersion, setRepoIndexCacheVersion] = useState(0)
   const [symbolCacheSearchQuery, setSymbolCacheSearchQuery] = useState('')
   const [symbolCacheViewMode, setSymbolCacheViewMode] = useState<SymbolCacheViewMode>('Focused hits')
+  const [symbolCacheSortMode, setSymbolCacheSortMode] = useState<SymbolCacheSortMode>('Best match')
   const [isSymbolCacheExpanded, setIsSymbolCacheExpanded] = useState(false)
   const [sampleRegressionIndexStatus, setSampleRegressionIndexStatus] = useState<string | null>(null)
   const [sampleRegressionDiagnostics, setSampleRegressionDiagnostics] = useState<
@@ -326,9 +329,10 @@ export default function WorkspacePage() {
           score: 0,
           signals: [],
         }))
+  const sortedRepoSymbolCacheEntries = sortRepoSymbolCacheEntries(symbolCacheDisplayEntries, symbolCacheSortMode)
   const visibleRepoSymbolCacheEntries: RankedRepoSymbolCacheEntry[] = isSymbolCacheExpanded
-    ? symbolCacheDisplayEntries
-    : symbolCacheDisplayEntries.slice(0, 6)
+    ? sortedRepoSymbolCacheEntries
+    : sortedRepoSymbolCacheEntries.slice(0, 6)
   const hiddenRepoSymbolCacheCount = Math.max(symbolCacheDisplayEntries.length - visibleRepoSymbolCacheEntries.length, 0)
   const repoIndexStatusSignals = repoIndex ? buildRepoIndexStatusSignals(repoIndex, repoIndexSource) : []
   const codeCandidates = buildCodeCandidates(
@@ -400,6 +404,9 @@ export default function WorkspacePage() {
   const expandedSnapshotComparison = expandedSnapshot
     ? buildSnapshotComparisonSummary(expandedSnapshot, selectedIdeaIds, draftMode, composerMarkdown)
     : null
+  const expandedSnapshotRelationSignals = expandedSnapshot
+    ? buildSnapshotRelationSignals(expandedSnapshot, composerSnapshots)
+    : []
   const filteredComposerSnapshots = composerSnapshots
     .filter((snapshot) => matchesSnapshotSearch(snapshot, snapshotSearchQuery))
     .filter(
@@ -992,6 +999,8 @@ export default function WorkspacePage() {
           name: duplicatedSnapshotName,
           updatedAt,
           archivedAt: undefined,
+          parentSnapshotId: snapshot.id,
+          parentSnapshotName: snapshot.name,
         },
         ...currentSnapshots,
       ]
@@ -1559,6 +1568,21 @@ export default function WorkspacePage() {
                                   }
                                 >
                                   {symbolCacheViewModes.map((mode) => (
+                                    <option key={mode} value={mode}>
+                                      {mode}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                              <label className="control-group">
+                                <span>Sort</span>
+                                <select
+                                  value={symbolCacheSortMode}
+                                  onChange={(event) =>
+                                    setSymbolCacheSortMode(event.target.value as SymbolCacheSortMode)
+                                  }
+                                >
+                                  {symbolCacheSortModes.map((mode) => (
                                     <option key={mode} value={mode}>
                                       {mode}
                                     </option>
@@ -2334,6 +2358,15 @@ export default function WorkspacePage() {
                   {expandedSnapshot.archivedAt ? (
                     <p className="repo-analysis-note">{`Archived ${formatIdeaTime(expandedSnapshot.archivedAt)}`}</p>
                   ) : null}
+                  {expandedSnapshotRelationSignals.length ? (
+                    <div className="repo-signal-list">
+                      {expandedSnapshotRelationSignals.map((signal) => (
+                        <span key={`${expandedSnapshot.id}-relation-${signal}`} className="repo-signal-item">
+                          {signal}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
                   {expandedSnapshotComparison ? (
                     <>
                       <div className="repo-signal-list">
@@ -2406,6 +2439,15 @@ export default function WorkspacePage() {
                         <p className="repo-analysis-note">
                           {`Archived ${formatIdeaTime(snapshot.archivedAt)}`}
                         </p>
+                      ) : null}
+                      {buildSnapshotRelationSignals(snapshot, composerSnapshots).length ? (
+                        <div className="repo-signal-list">
+                          {buildSnapshotRelationSignals(snapshot, composerSnapshots).map((signal) => (
+                            <span key={`${snapshot.id}-relation-${signal}`} className="repo-signal-item">
+                              {signal}
+                            </span>
+                          ))}
+                        </div>
                       ) : null}
                       {editingSnapshotId === snapshot.id ? (
                         <>
@@ -2762,6 +2804,29 @@ function buildDuplicateSnapshotName(
   return `${baseName} (copy ${duplicateIndex})`
 }
 
+function buildSnapshotRelationSignals(
+  snapshot: StoredComposerSnapshot,
+  snapshots: StoredComposerSnapshot[],
+): string[] {
+  const signals: string[] = []
+  const parentSnapshot = snapshot.parentSnapshotId
+    ? snapshots.find((candidate) => candidate.id === snapshot.parentSnapshotId) ?? null
+    : null
+  const derivedCount = snapshots.filter((candidate) => candidate.parentSnapshotId === snapshot.id).length
+
+  if (parentSnapshot) {
+    signals.push(`derived from ${parentSnapshot.name}`)
+  } else if (snapshot.parentSnapshotName) {
+    signals.push(`derived from ${snapshot.parentSnapshotName} (source missing)`)
+  }
+
+  if (derivedCount > 0) {
+    signals.push(`${derivedCount} derived ${derivedCount === 1 ? 'copy' : 'copies'}`)
+  }
+
+  return signals
+}
+
 function buildSnapshotComparisonSummary(
   snapshot: StoredComposerSnapshot,
   activeSelectedIdeaIds: string[],
@@ -2803,6 +2868,44 @@ function buildSnapshotComparisonSummary(
         : 'This snapshot differs from the active composer draft in at least one of selection, mode, or markdown size.',
     signals,
   }
+}
+
+function sortRepoSymbolCacheEntries(
+  entries: RankedRepoSymbolCacheEntry[],
+  sortMode: SymbolCacheSortMode,
+): RankedRepoSymbolCacheEntry[] {
+  return [...entries].sort((left, right) => {
+    if (sortMode === 'Path A-Z') {
+      return (
+        left.path.localeCompare(right.path) ||
+        left.symbol.localeCompare(right.symbol) ||
+        left.lineNumber - right.lineNumber
+      )
+    }
+
+    if (sortMode === 'Symbol A-Z') {
+      return (
+        left.symbol.localeCompare(right.symbol) ||
+        left.path.localeCompare(right.path) ||
+        left.lineNumber - right.lineNumber
+      )
+    }
+
+    if (sortMode === 'Line number') {
+      return (
+        left.lineNumber - right.lineNumber ||
+        left.path.localeCompare(right.path) ||
+        left.symbol.localeCompare(right.symbol)
+      )
+    }
+
+    return (
+      right.score - left.score ||
+      left.path.localeCompare(right.path) ||
+      left.symbol.localeCompare(right.symbol) ||
+      left.lineNumber - right.lineNumber
+    )
+  })
 }
 
 function matchesIdeaSearch(idea: StoredIdea, rawQuery: string): boolean {
