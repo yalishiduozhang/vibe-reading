@@ -1,7 +1,7 @@
 # OpenVibeRead Plan
 
 文档状态：Approved Baseline  
-最后更新：2026-03-25 19:18 (Asia/Shanghai)  
+最后更新：2026-03-25 19:20 (Asia/Shanghai)  
 当前阶段：Phase 4 in progress + Phase 5 in progress  
 执行原则：严格按本计划逐步推进；阶段性突破后进行本地 git commit；除非你明确要求，否则不 push 到云端。
 
@@ -1503,6 +1503,36 @@ AI 任务拆分为：
 - 继续推进 `M4`：评估是否要给 `All cached` 增加更明确的排序方式
 - 继续推进 `WP-H`：评估是否把 repo/index diagnostics 进一步下沉出页面层
 
+
+### 2026-03-25 19:20 / Phase 5 snapshot duplicate pass
+
+#### 已完成
+
+- `Saved Draft Snapshots` 和 snapshot detail card 现在都支持 `Duplicate`
+- duplicate 出来的新 snapshot 会自动生成同 selection 下唯一的 `copy / copy 2 / copy 3` 命名
+- 复制时会保留 markdown、selection、mode、note 等核心信息，但默认恢复为 active snapshot，而不是继续继承 archived 状态
+- duplicate 完成后会直接展开新的 snapshot，便于继续编辑或导出
+- 再次完成 `npm run build`
+- 再次完成 `npm run lint`
+
+#### 当前判断
+
+- `M5` 已经开始具备真正的 draft entity 操作，而不只是查看、改名、归档和删除
+- `Duplicate` 让 snapshot 更像可派生的草稿节点，为后续 compare/version-chain 留出了更自然的路径
+- 这一步继续维持 Local-first 原则，没有引入新的页面或更重的文档系统
+
+#### 遇到的问题
+
+- 当前 duplicate 仍然只是平铺复制，没有记录 parent/derived 关系
+- 还没有 compare 视图，复制后的差异仍需用户自己判断
+- 当前唯一命名规则仍限制在同一 selection 内，不是全局 snapshot namespace
+
+#### 下一步
+
+- 继续推进 `M5`：评估是否给 snapshot 增加 compare 或 parent/derived 关系
+- 继续推进 `M4`：评估是否要给 `All cached` 增加更明确的排序方式
+- 继续推进 `WP-H`：评估是否把 snapshot/detail 操作进一步下沉出页面层
+
 ## 15. 决策记录
 
 ### D-001（2026-03-24）
@@ -1825,6 +1855,15 @@ AI 任务拆分为：
 
 - 当前更需要让 repo preview 内部形成“聚焦解释 + 全量浏览”的连续体验，而不是把 symbol cache 再拆成新的信息层级。
 - 双模式已经足够覆盖当前调试和探索需求，同时与现有轻量原型的复杂度控制保持一致。
+
+### D-036（2026-03-25）
+
+决定：snapshot 的第一轮实体操作先补 `Duplicate`，并把复制结果视为新的 active draft 节点，而不是一开始就引入完整版本链。
+
+原因：
+
+- `Duplicate` 已经能覆盖当前最常见的“在现有草稿基础上继续分叉”需求，成本比直接做版本关系系统低很多。
+- 先把复制与继续编辑路径跑通，再决定是否真的需要 parent/derived 元数据和 compare 视图，更符合当前原型验证节奏。
 
 ## 16. 当前开放问题
 

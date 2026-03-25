@@ -973,6 +973,36 @@ export default function WorkspacePage() {
     setComposerStatus(`Loading snapshot "${snapshot.name}"...`)
   }
 
+  function handleDuplicateComposerSnapshot(snapshot: StoredComposerSnapshot) {
+    const updatedAt = new Date().toISOString()
+    let duplicatedSnapshotName = ''
+    let duplicatedSnapshotId = ''
+
+    setComposerSnapshots((currentSnapshots) => {
+      duplicatedSnapshotName = buildDuplicateSnapshotName(snapshot, currentSnapshots)
+      duplicatedSnapshotId = crypto.randomUUID()
+
+      return [
+        {
+          ...snapshot,
+          id: duplicatedSnapshotId,
+          name: duplicatedSnapshotName,
+          updatedAt,
+          archivedAt: undefined,
+        },
+        ...currentSnapshots,
+      ]
+    })
+
+    if (duplicatedSnapshotId) {
+      setExpandedSnapshotId(duplicatedSnapshotId)
+    }
+    if (duplicatedSnapshotName) {
+      setComposerSnapshotName(duplicatedSnapshotName)
+      setComposerStatus(`Duplicated snapshot as "${duplicatedSnapshotName}".`)
+    }
+  }
+
   function handleDeleteComposerSnapshot(snapshotId: string) {
     if (editingSnapshotId === snapshotId) {
       setEditingSnapshotId('')
@@ -2311,6 +2341,13 @@ export default function WorkspacePage() {
                     </button>
                     <button
                       className="ghost-button ghost-button-small"
+                      onClick={() => handleDuplicateComposerSnapshot(expandedSnapshot)}
+                      type="button"
+                    >
+                      Duplicate
+                    </button>
+                    <button
+                      className="ghost-button ghost-button-small"
                       onClick={() => void handleCopyComposerSnapshotMarkdown(expandedSnapshot)}
                       type="button"
                     >
@@ -2399,6 +2436,13 @@ export default function WorkspacePage() {
                             type="button"
                           >
                             Load Snapshot
+                          </button>
+                          <button
+                            className="ghost-button ghost-button-small"
+                            onClick={() => handleDuplicateComposerSnapshot(snapshot)}
+                            type="button"
+                          >
+                            Duplicate
                           </button>
                           <button
                             className="ghost-button ghost-button-small"
@@ -2672,6 +2716,30 @@ function getSnapshotTagSummary(snapshot: StoredComposerSnapshot): string {
   }
 
   return snapshot.ideaTags.join(', ')
+}
+
+function buildDuplicateSnapshotName(
+  snapshot: StoredComposerSnapshot,
+  snapshots: StoredComposerSnapshot[],
+): string {
+  const baseName = snapshot.name.replace(/\s+\(copy(?:\s+\d+)?\)$/i, '')
+  const existingNames = new Set(
+    snapshots
+      .filter((currentSnapshot) => currentSnapshot.selectionKey === snapshot.selectionKey)
+      .map((currentSnapshot) => currentSnapshot.name.toLowerCase()),
+  )
+
+  const firstCopyName = `${baseName} (copy)`
+  if (!existingNames.has(firstCopyName.toLowerCase())) {
+    return firstCopyName
+  }
+
+  let duplicateIndex = 2
+  while (existingNames.has(`${baseName} (copy ${duplicateIndex})`.toLowerCase())) {
+    duplicateIndex += 1
+  }
+
+  return `${baseName} (copy ${duplicateIndex})`
 }
 
 function matchesIdeaSearch(idea: StoredIdea, rawQuery: string): boolean {
