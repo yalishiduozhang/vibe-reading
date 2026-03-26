@@ -1,58 +1,11 @@
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 import type { ReaderPageSnapshot, ReaderParagraph, ReadingIntent } from './types'
 
 GlobalWorkerOptions.workerSrc = workerUrl
-ensureReadableStreamAsyncIterator()
 
 const DEFAULT_SCALE = 1.28
-
-function ensureReadableStreamAsyncIterator(): void {
-  if (typeof ReadableStream === 'undefined') {
-    return
-  }
-
-  const prototype = ReadableStream.prototype as ReadableStream<unknown> & {
-    values?: () => AsyncIterableIterator<unknown>
-    [Symbol.asyncIterator]?: () => AsyncIterableIterator<unknown>
-  }
-
-  if (typeof prototype[Symbol.asyncIterator] === 'function') {
-    return
-  }
-
-  const createAsyncIterator = function (this: ReadableStream<unknown>): AsyncIterableIterator<unknown> {
-    const reader = this.getReader()
-
-    return {
-      async next() {
-        return reader.read()
-      },
-      async return() {
-        await reader.releaseLock()
-        return { done: true, value: undefined }
-      },
-      [Symbol.asyncIterator]() {
-        return this
-      },
-    }
-  }
-
-  Object.defineProperty(prototype, Symbol.asyncIterator, {
-    configurable: true,
-    writable: true,
-    value: createAsyncIterator,
-  })
-
-  if (typeof prototype.values !== 'function') {
-    Object.defineProperty(prototype, 'values', {
-      configurable: true,
-      writable: true,
-      value: createAsyncIterator,
-    })
-  }
-}
 
 export type LoadedPdfDocument = {
   numPages: number
@@ -67,7 +20,12 @@ type PdfPageLike = {
     viewport: { width: number; height: number }
     transform?: [number, number, number, number, number, number]
   }) => { promise: Promise<void> }
-  getTextContent: () => Promise<{ items: unknown[] }>
+  getTextContent: () => Promise<{ items: unknown[]; styles?: Record<string, unknown>; lang?: string | null }>
+  streamTextContent?: () => ReadableStream<{
+    items: unknown[]
+    styles?: Record<string, unknown>
+    lang?: string | null
+  }>
   cleanup: () => void
 }
 
@@ -133,7 +91,7 @@ export async function renderPdfPage(options: {
 
   await renderTask.promise
 
-  const textContent = await page.getTextContent()
+  const textContent = await getTextContent(page)
   const paragraphs = extractParagraphs(textContent.items, options.pageNumber, viewport.height, options.intent)
   page.cleanup()
 
@@ -143,6 +101,45 @@ export async function renderPdfPage(options: {
     height: viewport.height,
     paragraphs,
   }
+}
+
+async function getTextContent(
+  page: PdfPageLike,
+): Promise<{ items: unknown[]; styles?: Record<string, unknown>; lang?: string | null }> {
+  if (typeof page.streamTextContent !== 'function') {
+    return page.getTextContent()
+  }
+
+  const stream = page.streamTextContent()
+  const reader = stream.getReader()
+  const result: { items: unknown[]; styles: Record<string, unknown>; lang: string | null } = {
+    items: [],
+    styles: Object.create(null),
+    lang: null,
+  }
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      if (!value) {
+        continue
+      }
+
+      result.lang ??= value.lang ?? null
+      if (value.styles) {
+        Object.assign(result.styles, value.styles)
+      }
+      result.items.push(...value.items)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  return result
 }
 
 function extractParagraphs(
