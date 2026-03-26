@@ -15,7 +15,7 @@ test('buildPdfLoadCompatibilityOptions disables stream-related options for Safar
   })
 })
 
-test('buildPdfLoadCompatibilityOptions keeps defaults for Chromium browsers on iOS', () => {
+test('buildPdfLoadCompatibilityOptions keeps defaults for Chrome on iOS', () => {
   const options = buildPdfLoadCompatibilityOptions(
     'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/133.0.6943.120 Mobile/15E148 Safari/604.1',
   )
