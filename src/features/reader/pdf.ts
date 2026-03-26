@@ -2,6 +2,7 @@ import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
 import type { ReaderPageSnapshot, ReaderParagraph, ReadingIntent } from './types'
+import { buildPdfLoadCompatibilityOptions } from './pdf-load-options'
 
 GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -50,7 +51,10 @@ const intentKeywords: Record<ReadingIntent, string[]> = {
 
 export async function loadPdfDocument(file: File): Promise<LoadedPdfDocument> {
   const buffer = await file.arrayBuffer()
-  const loadingTask = getDocument({ data: new Uint8Array(buffer) })
+  const loadingTask = getDocument({
+    data: new Uint8Array(buffer),
+    ...buildPdfLoadCompatibilityOptions(globalThis.navigator?.userAgent),
+  })
   const documentProxy = await loadingTask.promise
 
   return documentProxy as unknown as LoadedPdfDocument
