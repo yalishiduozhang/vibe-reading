@@ -280,7 +280,7 @@ function collectKeyTerms(text: string): string[] {
 }
 
 function splitSentences(text: string): string[] {
-  return text.split(/(?<=[.!?])\s+/).filter(Boolean)
+  return text.replace(/([.!?])\s+/g, '$1\n').split('\n').filter(Boolean)
 }
 
 function stitchFragments(fragments: string[]): string {

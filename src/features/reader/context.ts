@@ -70,7 +70,8 @@ function buildEvidenceRefs(
 
 function splitSentences(text: string): string[] {
   return text
-    .split(/(?<=[.!?])\s+/)
+    .replace(/([.!?])\s+/g, '$1\n')
+    .split('\n')
     .map((sentence) => sentence.trim())
     .filter(Boolean)
 }

@@ -51,7 +51,11 @@ export function saveStoredAiConfig(config: StoredAiConfig) {
     return
   }
 
-  window.localStorage.setItem(aiConfigStorageKey, JSON.stringify(normalizeAiConfig(config)))
+  try {
+    window.localStorage.setItem(aiConfigStorageKey, JSON.stringify(normalizeAiConfig(config)))
+  } catch {
+    // localStorage may be unavailable in Safari private browsing or restricted environments.
+  }
 }
 
 export function normalizeAiConfig(config: StoredAiConfig): StoredAiConfig {
