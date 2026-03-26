@@ -4,8 +4,55 @@ import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 import type { ReaderPageSnapshot, ReaderParagraph, ReadingIntent } from './types'
 
 GlobalWorkerOptions.workerSrc = workerUrl
+ensureReadableStreamAsyncIterator()
 
 const DEFAULT_SCALE = 1.28
+
+function ensureReadableStreamAsyncIterator(): void {
+  if (typeof ReadableStream === 'undefined') {
+    return
+  }
+
+  const prototype = ReadableStream.prototype as ReadableStream<unknown> & {
+    values?: () => AsyncIterableIterator<unknown>
+    [Symbol.asyncIterator]?: () => AsyncIterableIterator<unknown>
+  }
+
+  if (typeof prototype[Symbol.asyncIterator] === 'function') {
+    return
+  }
+
+  const createAsyncIterator = function (this: ReadableStream<unknown>): AsyncIterableIterator<unknown> {
+    const reader = this.getReader()
+
+    return {
+      async next() {
+        return reader.read()
+      },
+      async return() {
+        await reader.releaseLock()
+        return { done: true, value: undefined }
+      },
+      [Symbol.asyncIterator]() {
+        return this
+      },
+    }
+  }
+
+  Object.defineProperty(prototype, Symbol.asyncIterator, {
+    configurable: true,
+    writable: true,
+    value: createAsyncIterator,
+  })
+
+  if (typeof prototype.values !== 'function') {
+    Object.defineProperty(prototype, 'values', {
+      configurable: true,
+      writable: true,
+      value: createAsyncIterator,
+    })
+  }
+}
 
 export type LoadedPdfDocument = {
   numPages: number
