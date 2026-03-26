@@ -1,5 +1,5 @@
-import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import workerUrl from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?url'
 
 import type { ReaderPageSnapshot, ReaderParagraph, ReadingIntent } from './types'
 
