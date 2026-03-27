@@ -106,6 +106,7 @@ export async function renderPdfPage(options: {
 async function getTextContent(
   page: PdfPageLike,
 ): Promise<{ items: unknown[]; styles?: Record<string, unknown>; lang?: string | null }> {
+  // Related upstream Safari issue: https://github.com/mozilla/pdf.js/issues/20973
   if (typeof page.streamTextContent !== 'function') {
     return page.getTextContent()
   }
